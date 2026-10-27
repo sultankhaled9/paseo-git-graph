@@ -75,6 +75,8 @@ export function useRepoGraph(target: RepoTarget, scope: LogScope) {
     error: revision.error ?? log.error ?? status.error,
     loading: revision.isPending || log.isPending,
     loadingMore: log.isFetching && (log.data?.hasMore ?? false) && commits.length < limit,
+    /** The list on screen belongs to a previous key (another scope or page size) while new data loads. */
+    updating: log.isFetching && log.isPlaceholderData,
     canLoadMore,
     limitReached: (log.data?.hasMore ?? false) && limit >= LOG_MAX_LIMIT,
     loadMore,

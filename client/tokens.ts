@@ -18,6 +18,8 @@ export const ON_LANE_TEXT = "#ffffff";
 export const MONO_FONT = "monospace";
 /** Below this width the graph drops metadata columns and shows commit detail in a modal. */
 export const NARROW_LAYOUT_WIDTH = 720;
+/** Opacity of commits that do not match the search, so the graph stays readable around matches. */
+export const DIMMED_OPACITY = 0.3;
 
 export function laneColor(color: number): string {
   return LANE_PALETTE[color % LANE_PALETTE.length];

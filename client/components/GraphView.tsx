@@ -1,8 +1,9 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { FlatList, Modal } from "@getpaseo/plugin/client/react-native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  type FlatList as NativeFlatList,
   type LayoutChangeEvent,
   type ListRenderItem,
   Pressable,
@@ -10,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { LOG_MAX_LIMIT, ROW_HEIGHT } from "../../shared/constants";
-import type { CommitSummary, RepoTarget } from "../../shared/contracts";
+import type { CommitSummary, LogScope, RepoTarget } from "../../shared/contracts";
 import {
   type GraphRow as GraphRowLayout,
   layoutGraph,
@@ -18,6 +19,7 @@ import {
   withWorkInProgress,
 } from "../../shared/graph-layout";
 import { isMine } from "../../shared/author";
+import { matchesQuery } from "../../shared/search";
 import { useNow } from "../hooks/useNow";
 import { useRepoGraph } from "../hooks/useRepoQueries";
 import { FONT_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
@@ -26,11 +28,15 @@ import { CommitDetail } from "./CommitDetail";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
 import { WipDetail } from "./WipDetail";
+import { SearchBar } from "./SearchBar";
 import { hasWorkInProgress, WipRow } from "./WipRow";
 
 const LIST_FLEX = 3;
 const DETAIL_FLEX = 2;
 const DIVIDER_WIDTH = 1;
+/** Where a jumped-to match lands vertically: 0 is the top of the list, 1 the bottom. */
+const MATCH_VIEW_POSITION = 0.3;
+const NO_MATCH = -1;
 
 interface ListItem {
   commit: CommitSummary;
@@ -50,7 +56,11 @@ function keyExtractor(item: ListItem): string {
 
 export function GraphView({ target, theme, compact }: GraphViewProps) {
   const { colors } = theme;
-  const repo = useRepoGraph(target, "all");
+  const [scope, setScope] = useState<LogScope>("all");
+  const repo = useRepoGraph(target, scope);
+  const [query, setQuery] = useState("");
+  const [matchPosition, setMatchPosition] = useState(0);
+  const listRef = useRef<NativeFlatList<ListItem>>(null);
   const now = useNow();
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   // The panel can sit in the narrow Explorer of a wide window, so size from our own width.
@@ -88,6 +98,54 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     });
   }, [repo.commits, graph, showWip, identityName, identityEmail]);
   const laneCount = Math.max(graph.laneCount, 1);
+
+  const searching = query.trim().length > 0;
+  const matchIndices = useMemo(
+    () =>
+      searching
+        ? items.flatMap((item, index) => (matchesQuery(item.commit, query) ? [index] : []))
+        : [],
+    [items, query, searching],
+  );
+  const matchedHashes = useMemo(
+    () => new Set(matchIndices.map((index) => items[index]?.commit.hash)),
+    [matchIndices, items],
+  );
+  const position = Math.min(matchPosition, Math.max(matchIndices.length - 1, 0));
+  const focusedIndex = matchIndices[position] ?? NO_MATCH;
+  const focusedHash = items[focusedIndex]?.commit.hash ?? null;
+
+  const scrollToMatch = useCallback(
+    (nextPosition: number) => {
+      const index = matchIndices[nextPosition];
+      if (index === undefined) return;
+      setMatchPosition(nextPosition);
+      listRef.current?.scrollToIndex({ index, viewPosition: MATCH_VIEW_POSITION, animated: true });
+    },
+    [matchIndices],
+  );
+  const nextMatch = useCallback(() => {
+    if (matchIndices.length > 0) scrollToMatch((position + 1) % matchIndices.length);
+  }, [matchIndices.length, position, scrollToMatch]);
+  const previousMatch = useCallback(() => {
+    if (matchIndices.length > 0) scrollToMatch((position - 1 + matchIndices.length) % matchIndices.length);
+  }, [matchIndices.length, position, scrollToMatch]);
+  const onQueryChange = useCallback((next: string) => {
+    setQuery(next);
+    setMatchPosition(0);
+  }, []);
+  const onScopeChange = useCallback((next: LogScope) => {
+    setScope(next);
+    setMatchPosition(0);
+  }, []);
+  // Jump to the first match as the query changes; later list refreshes must not move the view.
+  const latestScroll = useRef(scrollToMatch);
+  useEffect(() => {
+    latestScroll.current = scrollToMatch;
+  });
+  useEffect(() => {
+    latestScroll.current(0);
+  }, [query]);
   // The detail pane takes width from the list, so rows drop their author and date columns.
   const condensed = narrow || activeSelection !== null;
 
@@ -102,10 +160,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         selected={item.commit.hash === selectedHash}
         mine={item.mine}
         now={now}
+        dimmed={searching && !matchedHashes.has(item.commit.hash)}
+        focused={item.commit.hash === focusedHash}
         onSelect={setSelectedHash}
       />
     ),
-    [laneCount, theme, condensed, selectedHash, now],
+    [laneCount, theme, condensed, selectedHash, now, searching, matchedHashes, focusedHash],
   );
 
   const headerHeight = showWip ? ROW_HEIGHT : 0;
@@ -176,6 +236,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
       <View style={{ flex: 1 }}>
         {condensed ? null : <ColumnHeader laneCount={laneCount} theme={theme} />}
         <FlatList
+          ref={listRef}
           style={{ flex: 1 }}
           data={items}
           renderItem={renderItem}
@@ -215,6 +276,19 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
       {status ? <StatusBar status={status} theme={theme} /> : null}
+      <SearchBar
+        theme={theme}
+        query={query}
+        onQueryChange={onQueryChange}
+        matchCount={matchIndices.length}
+        matchPosition={position}
+        loadedCount={items.length}
+        onPrevious={previousMatch}
+        onNext={nextMatch}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        updating={repo.updating}
+      />
       {narrow ? (
         <>
           {body}

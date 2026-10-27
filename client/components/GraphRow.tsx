@@ -12,6 +12,7 @@ import {
   authorColor,
   CHIP_ICON_SIZE,
   DATE_COLUMN_WIDTH,
+  DIMMED_OPACITY,
   FONT_SIZE,
   HASH_COLUMN_WIDTH,
   laneColor,
@@ -94,6 +95,8 @@ interface GraphRowProps {
   selected: boolean;
   mine: boolean;
   now: number;
+  dimmed: boolean;
+  focused: boolean;
   onSelect(hash: string): void;
 }
 
@@ -106,6 +109,8 @@ export const GraphRow = memo(function GraphRow({
   selected,
   mine,
   now,
+  dimmed,
+  focused,
   onSelect,
 }: GraphRowProps) {
   const { colors } = theme;
@@ -125,7 +130,8 @@ export const GraphRow = memo(function GraphRow({
         alignItems: "center",
         gap: SPACING.sm,
         paddingHorizontal: SPACING.sm,
-        backgroundColor: selected ? colors.surface2 : colors.surface0,
+        opacity: dimmed ? DIMMED_OPACITY : 1,
+        backgroundColor: selected ? colors.surface2 : focused ? colors.surface1 : colors.surface0,
       }}
     >
       {mine ? (

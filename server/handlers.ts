@@ -2,14 +2,14 @@ import type { RpcInput, RpcOutput } from "@getpaseo/plugin";
 import type {
   commitRpc,
   diffRpc,
+  folderReposRpc,
   logRpc,
-  Project,
   RepoTarget,
   revisionRpc,
   statusRpc,
   wipDiffRpc,
 } from "../shared/contracts";
-import { type RepoGuardDeps, resolveRepo } from "./repo-guard";
+import { listFolderRepos, type ReadSettings, type RepoGuardDeps, resolveRepo } from "./repo-guard";
 import { getCommit, getDiff, getLog, getRevision, getStatus, getWipDiff } from "./repo";
 
 /** The slice of the Paseo SDK the guard needs; PaseoApi satisfies it structurally. */
@@ -21,12 +21,10 @@ export interface WorkspaceLookup {
   };
 }
 
-export type ReadProjects = () => Promise<readonly Project[]>;
-
-export function createRepoHandlers(readProjects: ReadProjects) {
+export function createRepoHandlers(readSettings: ReadSettings) {
   const resolve = (target: RepoTarget, paseo: WorkspaceLookup): Promise<string> => {
     const deps: RepoGuardDeps = {
-      readProjects,
+      readSettings,
       async getWorkspace(workspaceId) {
         const workspace = await paseo.workspaces.ref(workspaceId).refresh();
         if (!workspace) return null;
@@ -37,6 +35,9 @@ export function createRepoHandlers(readProjects: ReadProjects) {
   };
 
   return {
+    folderRepos({ folderId }: RpcInput<typeof folderReposRpc>): Promise<RpcOutput<typeof folderReposRpc>> {
+      return listFolderRepos(folderId, readSettings);
+    },
     async status(
       { target }: RpcInput<typeof statusRpc>,
       paseo: WorkspaceLookup,

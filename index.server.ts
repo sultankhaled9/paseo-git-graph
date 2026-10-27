@@ -1,9 +1,11 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { createRepoHandlers } from "./server/handlers";
-import { validateRepoPath } from "./server/repo-guard";
+import { inspectPath, validateRepoPath } from "./server/repo-guard";
 import {
   commitRpc,
   diffRpc,
+  folderReposRpc,
+  inspectPathRpc,
   logRpc,
   projectsSettings,
   revisionRpc,
@@ -17,10 +19,12 @@ export default function contribute(server: PluginServerContext) {
   const repo = createRepoHandlers(async () => {
     const state = await settings.read();
     if (state.status !== "ready") throw new Error(`Saved projects are invalid: ${state.error}`);
-    return state.values.projects;
+    return state.values;
   });
 
   server.handle(validatePathRpc, ({ path }) => validateRepoPath(path));
+  server.handle(inspectPathRpc, ({ path }) => inspectPath(path));
+  server.handle(folderReposRpc, (input) => repo.folderRepos(input));
   server.handle(statusRpc, (input, { paseo }) => repo.status(input, paseo));
   server.handle(logRpc, (input, { paseo }) => repo.log(input, paseo));
   server.handle(commitRpc, (input, { paseo }) => repo.commit(input, paseo));

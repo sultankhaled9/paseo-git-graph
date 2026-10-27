@@ -19,7 +19,14 @@ import {
 const NO_COMMITS: readonly CommitSummary[] = [];
 
 export function targetKey(target: RepoTarget): string {
-  return target.kind === "project" ? `project:${target.projectId}` : `workspace:${target.workspaceId}`;
+  switch (target.kind) {
+    case "project":
+      return `project:${target.projectId}`;
+    case "workspace":
+      return `workspace:${target.workspaceId}`;
+    case "folder-repo":
+      return `folder:${target.folderId}:${target.relativePath}`;
+  }
 }
 
 /**

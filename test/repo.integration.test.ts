@@ -222,7 +222,7 @@ describe("repository identity", () => {
 describe("repository guard", () => {
   function deps(projects: readonly Project[], workspaces: Record<string, { directory: string | null; projectKind: string }> = {}): RepoGuardDeps {
     return {
-      readProjects: async () => projects,
+      readSettings: async () => ({ projects: [...projects], folders: [] }),
       getWorkspace: async (id) => workspaces[id] ?? null,
     };
   }

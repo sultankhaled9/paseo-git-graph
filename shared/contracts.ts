@@ -53,6 +53,11 @@ export const folderRelativePathSchema = z
 export const repoTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project"), projectId: z.string().min(1) }),
   z.object({ kind: z.literal("workspace"), workspaceId: z.string().min(1) }),
+  z.object({
+    kind: z.literal("folder-repo"),
+    folderId: z.string().min(1),
+    relativePath: folderRelativePathSchema,
+  }),
 ]);
 export type RepoTarget = z.infer<typeof repoTargetSchema>;
 

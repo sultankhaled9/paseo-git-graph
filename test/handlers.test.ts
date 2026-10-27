@@ -38,7 +38,7 @@ afterAll(async () => {
 });
 
 describe("repo handlers", () => {
-  const handlers = createRepoHandlers(async () => [{ id: "p", name: "Repo", path: repo }]);
+  const handlers = createRepoHandlers(async () => ({ projects: [{ id: "p", name: "Repo", path: repo }], folders: [] }));
 
   it("serve a saved project", async () => {
     const result = await handlers.log({ target: { kind: "project", projectId: "p" }, limit: 5, scope: "all" }, lookup({}));

@@ -13,7 +13,6 @@ import {
 import { LOG_MAX_LIMIT, ROW_HEIGHT } from "../../shared/constants";
 import type { CommitSummary, LogScope, RepoTarget } from "../../shared/contracts";
 import {
-  type GraphRow as GraphRowLayout,
   layoutGraph,
   projectRow,
   WIP_NODE_ID,
@@ -37,7 +36,7 @@ import {
 import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
 import { Legend } from "./Legend";
-import { GraphRow } from "./GraphRow";
+import { CommitRow, type CommitRowGraph } from "./CommitRow";
 import { StatusBar } from "./StatusBar";
 import { WipDetail } from "./WipDetail";
 import { SearchBar } from "./SearchBar";
@@ -52,7 +51,7 @@ const NO_MATCH = -1;
 
 interface ListItem {
   commit: CommitSummary;
-  row: GraphRowLayout;
+  graph: CommitRowGraph;
   mine: boolean;
 }
 
@@ -114,7 +113,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
       const row = commitRows[index];
       if (!row) return [];
       const mine = isMine({ name: commit.authorName, email: commit.authorEmail }, identity);
-      return [{ commit, row: projectRow(row, laneCount), mine }];
+      return [{ commit, graph: { row: projectRow(row, laneCount), laneCount }, mine }];
     });
   }, [repo.commits, graph, showWip, laneCount, identityName, identityEmail]);
 
@@ -175,10 +174,9 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
 
   const renderItem = useCallback<ListRenderItem<ListItem>>(
     ({ item }) => (
-      <GraphRow
+      <CommitRow
         commit={item.commit}
-        row={item.row}
-        laneCount={laneCount}
+        graph={item.graph}
         theme={theme}
         compact={condensed}
         selected={item.commit.hash === selectedHash}

@@ -12,7 +12,7 @@ import {
 
 const BORDER_WIDTH = 1;
 
-/** Column labels for the wide layout; widths mirror GraphRow so labels sit over their cells. */
+/** Column labels for the wide layout; widths mirror CommitRow so labels sit over their cells. */
 export function ColumnHeader({ laneCount, theme }: { laneCount: number; theme: PluginTheme }) {
   const { colors } = theme;
   const label = { color: colors.foregroundMuted, fontSize: FONT_SIZE.small, fontWeight: "600" as const };

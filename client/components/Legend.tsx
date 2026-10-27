@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 import { NODE_SIZE } from "../../shared/constants";
 import type { Identity } from "../../shared/contracts";
 import { DIMMED_OPACITY, FONT_SIZE, laneColor, MINE_BAR_WIDTH, SPACING } from "../tokens";
-import { AuthorBadge, RefChip } from "./GraphRow";
+import { AuthorBadge, RefChip } from "./CommitRow";
 
 const BORDER_WIDTH = 1;
 const RING_WIDTH = 2;

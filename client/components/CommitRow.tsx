@@ -88,10 +88,15 @@ export function AuthorBadge({ name, mine, theme }: { name: string; mine: boolean
   );
 }
 
-interface GraphRowProps {
-  commit: CommitSummary;
+/** Lane drawing for rows inside the commit graph; lists outside the graph omit it. */
+export interface CommitRowGraph {
   row: GraphRowLayout;
   laneCount: number;
+}
+
+interface CommitRowProps {
+  commit: CommitSummary;
+  graph?: CommitRowGraph;
   theme: PluginTheme;
   compact: boolean;
   selected: boolean;
@@ -102,10 +107,10 @@ interface GraphRowProps {
   onSelect(hash: string): void;
 }
 
-export const GraphRow = memo(function GraphRow({
+/** One commit: optional graph lanes, labels, message, author (red when mine), date, and hash. */
+export const CommitRow = memo(function CommitRow({
   commit,
-  row,
-  laneCount,
+  graph,
   theme,
   compact,
   selected,
@@ -114,9 +119,9 @@ export const GraphRow = memo(function GraphRow({
   dimmed,
   focused,
   onSelect,
-}: GraphRowProps) {
+}: CommitRowProps) {
   const { colors } = theme;
-  const lane = laneColor(row.color);
+  const lane = graph ? laneColor(graph.row.color) : colors.accent;
   const visibleRefs = commit.refs.slice(0, compact ? MAX_VISIBLE_REFS_COMPACT : MAX_VISIBLE_REFS);
   const hiddenRefs = commit.refs.length - visibleRefs.length;
   const authorTextColor = mine ? colors.statusDanger : colors.foregroundMuted;
@@ -148,13 +153,15 @@ export const GraphRow = memo(function GraphRow({
           }}
         />
       ) : null}
-      <LaneCell
-        column={row.column}
-        color={row.color}
-        edges={row.edges}
-        laneCount={laneCount}
-        hollowFill={commit.parents.length > 1 ? colors.surface0 : undefined}
-      />
+      {graph ? (
+        <LaneCell
+          column={graph.row.column}
+          color={graph.row.color}
+          edges={graph.row.edges}
+          laneCount={graph.laneCount}
+          hollowFill={commit.parents.length > 1 ? colors.surface0 : undefined}
+        />
+      ) : null}
       <View
         style={[
           { flexDirection: "row", alignItems: "center", gap: SPACING.xs, overflow: "hidden" },

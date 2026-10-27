@@ -172,6 +172,15 @@ export const diffRpc = defineRpc({
   output: z.object({ text: z.string(), truncated: z.boolean() }),
 });
 
+export const wipAreaSchema = z.enum(["staged", "unstaged", "untracked", "conflicted"]);
+export type WipArea = z.infer<typeof wipAreaSchema>;
+
+export const wipDiffRpc = defineRpc({
+  name: "repo.wip-diff",
+  input: z.object({ target: repoTargetSchema, path: repoPathSchema, area: wipAreaSchema }),
+  output: z.object({ text: z.string(), truncated: z.boolean() }),
+});
+
 export const revisionRpc = defineRpc({
   name: "repo.revision",
   input: z.object({ target: repoTargetSchema }),

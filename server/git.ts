@@ -77,10 +77,14 @@ export interface CappedOutput {
   truncated: boolean;
 }
 
+const SUCCESS_EXIT_CODES: readonly number[] = [0];
+
+/** `okExitCodes` admits commands such as `diff --no-index` that exit 1 to mean "differences found". */
 export function runGitCapped(
   cwd: string,
   args: readonly string[],
   maxBytes: number,
+  okExitCodes: readonly number[] = SUCCESS_EXIT_CODES,
 ): Promise<CappedOutput> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", [...GIT_CONFIG_ARGS, ...args], {
@@ -113,7 +117,7 @@ export function runGitCapped(
     });
     child.on("error", (error) => reject(toGitError(error)));
     child.on("close", (code, signal) => {
-      if (!truncated && code !== 0) {
+      if (!truncated && (code === null || !okExitCodes.includes(code))) {
         const reason = signal ? `git stopped by ${signal}` : `git exited with code ${code}`;
         reject(new GitError(firstLine(stderr) || reason, code, stderr));
         return;

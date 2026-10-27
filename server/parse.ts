@@ -95,7 +95,8 @@ const BRANCH_UPSTREAM = "# branch.upstream ";
 const BRANCH_AB = "# branch.ab ";
 const INITIAL_OID = "(initial)";
 const DETACHED_HEAD = "(detached)";
-const UNCHANGED = ".";
+/** The porcelain v2 XY marker for "no change on this side". */
+export const UNCHANGED = ".";
 
 const ORDINARY_FIELDS = 8;
 const RENAMED_FIELDS = 9;
@@ -114,7 +115,7 @@ function afterFields(line: string, count: number): string {
   return line.slice(index + 1);
 }
 
-export function parseStatus(stdout: string, root: string): WorktreeStatus {
+export function parseStatus(stdout: string, root: string, maxFiles = STATUS_MAX_FILES): WorktreeStatus {
   const status: WorktreeStatus = {
     root,
     branch: null,
@@ -131,7 +132,7 @@ export function parseStatus(stdout: string, root: string): WorktreeStatus {
     filesTruncated: false,
   };
   const addFile = (file: StatusFile) => {
-    if (status.files.length < STATUS_MAX_FILES) status.files.push(file);
+    if (status.files.length < maxFiles) status.files.push(file);
     else status.filesTruncated = true;
   };
   const tokens = stdout.split("\0");

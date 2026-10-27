@@ -81,7 +81,7 @@ export const GraphRow = memo(function GraphRow({
         flexDirection: "row",
         alignItems: "center",
         gap: SPACING.sm,
-        paddingRight: SPACING.sm,
+        paddingHorizontal: SPACING.sm,
         backgroundColor: selected ? colors.surface2 : colors.surface0,
       }}
     >

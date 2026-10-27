@@ -49,6 +49,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     [repo.commits, repo.graph],
   );
   const laneCount = Math.max(repo.graph.laneCount, 1);
+  // The detail pane takes width from the list, so rows drop their author and date columns.
+  const condensed = compact || selectedHash !== null;
 
   const renderItem = useCallback<ListRenderItem<ListItem>>(
     ({ item }) => (
@@ -57,12 +59,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         row={item.row}
         laneCount={laneCount}
         theme={theme}
-        compact={compact}
+        compact={condensed}
         selected={item.commit.hash === selectedHash}
         onSelect={setSelectedHash}
       />
     ),
-    [laneCount, theme, compact, selectedHash],
+    [laneCount, theme, condensed, selectedHash],
   );
 
   const status = repo.status;

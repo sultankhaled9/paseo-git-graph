@@ -32,7 +32,13 @@ export const WipRow = memo(function WipRow({ status, column, color, laneCount, t
   return (
     <View
       accessibilityLabel={`Work in progress: ${parts.map((part) => `${part.count} ${part.label}`).join(", ")}`}
-      style={{ height: ROW_HEIGHT, flexDirection: "row", alignItems: "center", gap: SPACING.sm }}
+      style={{
+        height: ROW_HEIGHT,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: SPACING.sm,
+        paddingHorizontal: SPACING.sm,
+      }}
     >
       <LaneCell column={column} color={color} edges={NO_EDGES} laneCount={laneCount} hollowFill={colors.surface0} />
       <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.body, fontStyle: "italic" }}>WIP</Text>

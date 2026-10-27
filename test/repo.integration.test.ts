@@ -201,6 +201,15 @@ describe("repository identity", () => {
     expect((await getStatus(repo)).identity).toEqual({ name: "Ada Lovelace", email: "Ada@Example.com" });
   });
 
+  it("changes the worktree token when only the identity changes", async () => {
+    git(repo, "config", "user.email", "first@example.com");
+    const before = await getRevision(repo);
+    git(repo, "config", "user.email", "second@example.com");
+    const after = await getRevision(repo);
+    expect(after.refsToken).toBe(before.refsToken);
+    expect(after.worktreeToken).not.toBe(before.worktreeToken);
+  });
+
   it("reports an unset identity as null", async () => {
     git(repo, "config", "user.name", "Ada Lovelace");
     git(repo, "config", "user.email", "Ada@Example.com");

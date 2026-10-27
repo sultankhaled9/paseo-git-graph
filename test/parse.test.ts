@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STATUS_MAX_FILES } from "../shared/constants";
-import { parseCommitDetail, parseLog, parseRefs, parseStatus } from "../server/parse";
+import { parseCommitDetail, parseIdentity, parseLog, parseRefs, parseStatus } from "../server/parse";
 
 const F = "\x1f";
 const R = "\x1e";
@@ -223,5 +223,17 @@ describe("parseCommitDetail", () => {
 
   it("rejects output without a header", () => {
     expect(() => parseCommitDetail("garbage")).toThrow();
+  });
+});
+
+describe("parseIdentity", () => {
+  it("keeps the last value per key, as git resolves scopes", () => {
+    const stdout = "user.email global@x.com\nuser.name Sultan Almansour\nuser.email local@x.com\n";
+    expect(parseIdentity(stdout)).toEqual({ name: "Sultan Almansour", email: "local@x.com" });
+  });
+
+  it("reports missing keys as null", () => {
+    expect(parseIdentity("")).toEqual({ name: null, email: null });
+    expect(parseIdentity("user.name Ada\n")).toEqual({ name: "Ada", email: null });
   });
 });

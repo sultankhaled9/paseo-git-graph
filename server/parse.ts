@@ -2,6 +2,7 @@ import { STATUS_MAX_FILES } from "../shared/constants";
 import type {
   ChangeType,
   CommitDetail,
+  Identity,
   CommitSummary,
   FileChange,
   Ref,
@@ -268,4 +269,24 @@ export function parseCommitDetail(stdout: string): CommitDetail {
     message: header.slice(COMMIT_FIELDS_BEFORE_MESSAGE).join(FIELD).replace(/\n+$/, ""),
     files,
   };
+}
+
+/** The `git config --get-regexp` pattern for the identity keys. */
+export const IDENTITY_KEYS_PATTERN = "^user\\.(name|email)$";
+
+/**
+ * Parses `git config --get-regexp` output ("key value" per line). Git lists every scope from
+ * system to command line, so the last value for a key is the effective one.
+ */
+export function parseIdentity(stdout: string): Identity {
+  const identity: Identity = { name: null, email: null };
+  for (const line of stdout.split("\n")) {
+    const separator = line.indexOf(" ");
+    if (separator < 0) continue;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1).trim() || null;
+    if (key === "user.name") identity.name = value;
+    else if (key === "user.email") identity.email = value;
+  }
+  return identity;
 }

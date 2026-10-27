@@ -10,7 +10,16 @@ import type {
   WipArea,
 } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
-import { COMMIT_FORMAT, LOG_FORMAT, parseCommitDetail, parseLog, parseStatus, UNCHANGED } from "./parse";
+import {
+  COMMIT_FORMAT,
+  IDENTITY_KEYS_PATTERN,
+  LOG_FORMAT,
+  parseCommitDetail,
+  parseIdentity,
+  parseLog,
+  parseStatus,
+  UNCHANGED,
+} from "./parse";
 
 const STATUS_ARGS: readonly string[] = [
   "status",
@@ -26,17 +35,12 @@ function sha1(...parts: readonly string[]): string {
   return hash.digest("hex");
 }
 
-async function configValue(root: string, key: string): Promise<string | null> {
-  const value = (await runGitOptional(root, ["config", "--get", key])).trim();
-  return value.length > 0 ? value : null;
+function readIdentityConfig(root: string): Promise<string> {
+  return runGitOptional(root, ["config", "--get-regexp", IDENTITY_KEYS_PATTERN]);
 }
 
 export async function getIdentity(root: string): Promise<Identity> {
-  const [name, email] = await Promise.all([
-    configValue(root, "user.name"),
-    configValue(root, "user.email"),
-  ]);
-  return { name, email };
+  return parseIdentity(await readIdentityConfig(root));
 }
 
 export async function getStatus(root: string): Promise<RepoStatus> {
@@ -112,13 +116,15 @@ export function getDiff(
 export async function getRevision(
   root: string,
 ): Promise<{ refsToken: string; worktreeToken: string }> {
-  const [refs, symbolicHead, headOid, status] = await Promise.all([
+  const [refs, symbolicHead, headOid, status, identity] = await Promise.all([
     runGit(root, ["for-each-ref", "--format=%(objectname) %(refname)"]),
     runGitOptional(root, ["symbolic-ref", "-q", "HEAD"]),
     runGitOptional(root, ["rev-parse", "-q", "--verify", "HEAD"]),
     runGit(root, STATUS_ARGS),
+    readIdentityConfig(root),
   ]);
-  return { refsToken: sha1(refs, symbolicHead, headOid), worktreeToken: sha1(status) };
+  // Identity rides on the worktree token because the status response carries it.
+  return { refsToken: sha1(refs, symbolicHead, headOid), worktreeToken: sha1(status, identity) };
 }
 
 const DIFF_SAFETY_FLAGS: readonly string[] = ["--no-color", "--no-ext-diff", "--no-textconv"];

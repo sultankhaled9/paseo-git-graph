@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { DIFF_MAX_BYTES } from "../shared/constants";
+import { DIFF_MAX_BYTES, SYNC_COMMITS_LIMIT } from "../shared/constants";
 import { fileInArea } from "../shared/status-text";
 import type {
   CommitDetail,
@@ -7,6 +7,7 @@ import type {
   Identity,
   LogScope,
   RepoStatus,
+  SyncCommits,
   WipArea,
 } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
@@ -115,7 +116,8 @@ export async function getRevision(
   root: string,
 ): Promise<{ refsToken: string; worktreeToken: string }> {
   const [refs, symbolicHead, headOid, status, identity] = await Promise.all([
-    runGit(root, ["for-each-ref", "--format=%(objectname) %(refname)"]),
+    // %(upstream) puts each branch's tracking setting in the token, so changing it refreshes views.
+    runGit(root, ["for-each-ref", "--format=%(objectname) %(refname) %(upstream)"]),
     runGitOptional(root, ["symbolic-ref", "-q", "HEAD"]),
     runGitOptional(root, ["rev-parse", "-q", "--verify", "HEAD"]),
     runGit(root, STATUS_ARGS),
@@ -157,4 +159,61 @@ export async function getWipDiff(root: string, path: string, area: WipArea): Pro
         NO_INDEX_EXIT_CODES,
       );
   }
+}
+
+const SHORT_REFNAME_PREFIX = "refs/remotes/";
+
+async function syncLog(root: string, revisions: readonly string[]): Promise<{ commits: CommitSummary[]; truncated: boolean }> {
+  const stdout = await runGit(root, [
+    "log",
+    "--topo-order",
+    "--decorate=full",
+    `--max-count=${SYNC_COMMITS_LIMIT + 1}`,
+    `--format=${LOG_FORMAT}`,
+    ...revisions,
+  ]);
+  const commits = parseLog(stdout);
+  return { commits: commits.slice(0, SYNC_COMMITS_LIMIT), truncated: commits.length > SYNC_COMMITS_LIMIT };
+}
+
+/** The branch's tracked remote branch, only if it is configured and has been fetched. */
+async function fetchedUpstream(root: string): Promise<string | null> {
+  const branch = (await runGitOptional(root, ["symbolic-ref", "-q", "HEAD"])).trim();
+  if (!branch) return null;
+  const upstream = (await runGit(root, ["for-each-ref", "--format=%(upstream)", branch])).trim();
+  if (!upstream) return null;
+  return (await runGitOptional(root, ["rev-parse", "-q", "--verify", upstream])).trim() ? upstream : null;
+}
+
+/**
+ * Commits that exist only on this machine or only on the server, as of the last fetch. Revisions
+ * here are git's own (HEAD, full refnames), so `--not --remotes` can follow them as options.
+ */
+export async function getSyncCommits(root: string): Promise<SyncCommits> {
+  const empty = { toPush: [], toPull: [], toPushTruncated: false, toPullTruncated: false };
+  const [headOid, remotes, upstream] = await Promise.all([
+    runGitOptional(root, ["rev-parse", "-q", "--verify", "HEAD"]),
+    runGit(root, ["remote"]),
+    fetchedUpstream(root),
+  ]);
+  const hasRemotes = remotes.trim().length > 0;
+  if (!headOid.trim()) return { mode: hasRemotes ? "remotes" : "none", upstream: null, ...empty };
+
+  if (upstream) {
+    const [toPush, toPull] = await Promise.all([
+      syncLog(root, ["--end-of-options", `${upstream}..HEAD`]),
+      syncLog(root, ["--end-of-options", `HEAD..${upstream}`]),
+    ]);
+    return {
+      mode: "upstream",
+      upstream: upstream.startsWith(SHORT_REFNAME_PREFIX) ? upstream.slice(SHORT_REFNAME_PREFIX.length) : upstream,
+      toPush: toPush.commits,
+      toPull: toPull.commits,
+      toPushTruncated: toPush.truncated,
+      toPullTruncated: toPull.truncated,
+    };
+  }
+  if (!hasRemotes) return { mode: "none", upstream: null, ...empty };
+  const localOnly = await syncLog(root, ["HEAD", "--not", "--remotes"]);
+  return { mode: "remotes", upstream: null, ...empty, toPush: localOnly.commits, toPushTruncated: localOnly.truncated };
 }

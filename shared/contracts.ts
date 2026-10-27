@@ -254,6 +254,29 @@ export const identityRpc = defineRpc({
   output: identitySchema,
 });
 
+/**
+ * How the current branch relates to a server copy: "upstream" compares with the tracked branch,
+ * "remotes" lists commits that no remote has yet (no tracked branch), "none" means no remote exists.
+ */
+export const syncModeSchema = z.enum(["upstream", "remotes", "none"]);
+export type SyncMode = z.infer<typeof syncModeSchema>;
+
+export const syncCommitsSchema = z.object({
+  mode: syncModeSchema,
+  upstream: z.string().nullable(),
+  toPush: z.array(commitSummarySchema),
+  toPull: z.array(commitSummarySchema),
+  toPushTruncated: z.boolean(),
+  toPullTruncated: z.boolean(),
+});
+export type SyncCommits = z.infer<typeof syncCommitsSchema>;
+
+export const syncCommitsRpc = defineRpc({
+  name: "repo.sync-commits",
+  input: z.object({ target: repoTargetSchema }),
+  output: syncCommitsSchema,
+});
+
 export const revisionRpc = defineRpc({
   name: "repo.revision",
   input: z.object({ target: repoTargetSchema }),

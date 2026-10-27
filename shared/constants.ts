@@ -1,5 +1,7 @@
 export const LOG_PAGE_SIZE = 200;
 export const LOG_MAX_LIMIT = 5000;
+/** Commits listed per direction in My Changes (to push, to pull). */
+export const SYNC_COMMITS_LIMIT = 50;
 
 export const GIT_TIMEOUT_MS = 15_000;
 export const GIT_MAX_BUFFER_BYTES = 32 * 1024 * 1024;

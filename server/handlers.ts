@@ -9,6 +9,7 @@ import type {
   RepoTarget,
   revisionRpc,
   statusRpc,
+  syncCommitsRpc,
   wipDiffRpc,
 } from "../shared/contracts";
 import {
@@ -18,7 +19,16 @@ import {
   type RepoGuardDeps,
   resolveRepo,
 } from "./repo-guard";
-import { getCommit, getDiff, getIdentity, getLog, getRevision, getStatus, getWipDiff } from "./repo";
+import {
+  getCommit,
+  getDiff,
+  getIdentity,
+  getLog,
+  getRevision,
+  getStatus,
+  getSyncCommits,
+  getWipDiff,
+} from "./repo";
 
 /** The slice of the Paseo SDK the guard needs; PaseoApi satisfies it structurally. */
 export interface WorkspaceLookup {
@@ -50,6 +60,12 @@ export function createRepoHandlers(readSettings: ReadSettings) {
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof workspaceReposRpc>> {
       return listWorkspaceRepos(workspaceId, guardDeps(paseo));
+    },
+    async syncCommits(
+      { target }: RpcInput<typeof syncCommitsRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof syncCommitsRpc>> {
+      return getSyncCommits(await resolve(target, paseo));
     },
     async identity(
       { target }: RpcInput<typeof identityRpc>,

@@ -63,6 +63,7 @@ export async function getCommit(root: string, hash: string): Promise<CommitDetai
   const stdout = await runGit(root, [
     "show",
     "-z",
+    "--raw",
     "--numstat",
     "-M",
     "--diff-merges=first-parent",

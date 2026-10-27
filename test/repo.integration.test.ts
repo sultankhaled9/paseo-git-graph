@@ -125,8 +125,21 @@ describe("repository operations", () => {
     const hash = git(repo, "rev-parse", "feature");
     const detail = await getCommit(repo, hash);
     expect(detail.message).toBe("rename and binary");
-    expect(detail.files).toContainEqual({ path: "renamed.txt", oldPath: "a.txt", additions: 0, deletions: 0 });
-    expect(detail.files).toContainEqual({ path: "bin.dat", additions: null, deletions: null });
+    expect(detail.files).toContainEqual({
+      path: "renamed.txt",
+      oldPath: "a.txt",
+      change: "renamed",
+      additions: 0,
+      deletions: 0,
+    });
+    expect(detail.files).toContainEqual({ path: "bin.dat", change: "added", additions: null, deletions: null });
+  });
+
+  it("reports a merge's files against its first parent with change types", async () => {
+    const merge = await getCommit(repo, git(repo, "rev-parse", "main"));
+    expect(merge.files.map((file) => [file.path, file.change])).toEqual(
+      expect.arrayContaining([["renamed.txt", "renamed"], ["bin.dat", "added"]]),
+    );
   });
 
   it("returns a capped diff for a large file", async () => {

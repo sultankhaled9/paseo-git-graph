@@ -1,5 +1,6 @@
 import { STATUS_MAX_FILES } from "../shared/constants";
 import type {
+  ChangeType,
   CommitDetail,
   CommitSummary,
   FileChange,
@@ -180,12 +181,32 @@ export function parseStatus(stdout: string, root: string): WorktreeStatus {
 
 const NUMSTAT_PATTERN = /^(-|\d+)\t(-|\d+)\t([\s\S]*)$/;
 const BINARY_STAT = "-";
+const RAW_PREFIX = ":";
+
+const CHANGE_TYPES: Readonly<Record<string, ChangeType>> = {
+  A: "added",
+  M: "modified",
+  D: "deleted",
+  R: "renamed",
+  C: "copied",
+  T: "type-changed",
+};
+const PAIRED_STATUSES = new Set(["R", "C"]);
+
+function changeKey(path: string, oldPath?: string): string {
+  return `${oldPath ?? ""}\0${path}`;
+}
 
 function toCount(value: string): number | null {
   return value === BINARY_STAT ? null : Number(value);
 }
 
-/** Parses `git show -z --numstat --format=COMMIT_FORMAT`. Renames emit an empty path then old and new as separate fields. */
+/**
+ * Parses `git show -z --raw --numstat --format=COMMIT_FORMAT`. Raw records (":modes shas STATUS",
+ * then the path, or old and new paths for renames and copies) come first, then numstat records;
+ * numstat renames emit an empty path then old and new as separate fields. Files are joined on
+ * their path pair; a numstat entry without a raw record is reported as modified.
+ */
 export function parseCommitDetail(stdout: string): CommitDetail {
   const headerEnd = stdout.indexOf(RECORD);
   if (headerEnd < 0) throw new Error("Unexpected git show output");
@@ -202,21 +223,35 @@ export function parseCommitDetail(stdout: string): CommitDetail {
   ] = header;
 
   const files: FileChange[] = [];
+  const changes = new Map<string, ChangeType>();
   const tokens = stdout
     .slice(headerEnd + RECORD.length)
     .replace(/^\0?\n?/, "")
     .split("\0");
   for (let index = 0; index < tokens.length; index += 1) {
-    const match = NUMSTAT_PATTERN.exec(tokens[index] ?? "");
+    const token = tokens[index] ?? "";
+    if (token.startsWith(RAW_PREFIX)) {
+      const letter = (token.split(" ").pop() ?? "").charAt(0);
+      if (PAIRED_STATUSES.has(letter)) {
+        changes.set(changeKey(tokens[index + 2] ?? "", tokens[index + 1] ?? ""), CHANGE_TYPES[letter] ?? "modified");
+        index += 2;
+      } else {
+        changes.set(changeKey(tokens[index + 1] ?? ""), CHANGE_TYPES[letter] ?? "modified");
+        index += 1;
+      }
+      continue;
+    }
+    const match = NUMSTAT_PATTERN.exec(token);
     if (!match) continue;
     const [, additions = BINARY_STAT, deletions = BINARY_STAT, path = ""] = match;
+    const counts = { additions: toCount(additions), deletions: toCount(deletions) };
     if (path.length === 0) {
       const oldPath = tokens[index + 1] ?? "";
       const newPath = tokens[index + 2] ?? "";
       index += 2;
-      files.push({ path: newPath, oldPath, additions: toCount(additions), deletions: toCount(deletions) });
+      files.push({ path: newPath, oldPath, change: changes.get(changeKey(newPath, oldPath)) ?? "renamed", ...counts });
     } else {
-      files.push({ path, additions: toCount(additions), deletions: toCount(deletions) });
+      files.push({ path, change: changes.get(changeKey(path)) ?? "modified", ...counts });
     }
   }
 

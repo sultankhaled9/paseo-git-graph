@@ -148,38 +148,73 @@ describe("parseStatus", () => {
   });
 });
 
-function show(header: readonly string[], numstat: string): string {
-  return `${header.join(F)}${R}\0\n${numstat}`;
+function show(header: readonly string[], records: string): string {
+  return `${header.join(F)}${R}\0\n${records}`;
+}
+
+const ZERO = "0".repeat(40);
+
+/** A `--raw -z` record as git 2.53 emits it, e.g. ":100644 100644 <sha> <sha> M\0path\0". */
+function raw(status: string, ...paths: string[]): string {
+  return `:100644 100644 ${ZERO} ${ZERO} ${status}\0${paths.join("\0")}\0`;
 }
 
 const HEADER = [OID, OID2, "A", "a@x", "2026-10-27T10:00:00Z", "C", "c@x", "2026-10-27T11:00:00Z"];
 
 describe("parseCommitDetail", () => {
   it("parses metadata, message, and plain stats", () => {
-    const detail = parseCommitDetail(show([...HEADER, "subject\n\nbody line\n"], "3\t1\tsrc/a.ts\0"));
+    const detail = parseCommitDetail(
+      show([...HEADER, "subject\n\nbody line\n"], `${raw("M", "src/a.ts")}3\t1\tsrc/a.ts\0`),
+    );
     expect(detail).toMatchObject({
       hash: OID,
       parents: [OID2],
       committerName: "C",
       committerDate: "2026-10-27T11:00:00Z",
       message: "subject\n\nbody line",
-      files: [{ path: "src/a.ts", additions: 3, deletions: 1 }],
+      files: [{ path: "src/a.ts", change: "modified", additions: 3, deletions: 1 }],
     });
   });
 
-  it("parses renames and binary files", () => {
-    const detail = parseCommitDetail(show([...HEADER, "msg\n"], "0\t0\t\0a.txt\0b.txt\0-\t-\tbin.dat\0"));
-    expect(detail.files).toEqual([
-      { path: "b.txt", oldPath: "a.txt", additions: 0, deletions: 0 },
-      { path: "bin.dat", additions: null, deletions: null },
+  it("reads every change type and joins it to the stats by path", () => {
+    const records =
+      raw("D", "del.txt") +
+      raw("M", "mod.txt") +
+      raw("R100", "keep.txt", "moved.txt") +
+      raw("A", "new file.txt") +
+      raw("T", "tc.txt") +
+      raw("C75", "src.txt", "copy.txt") +
+      "0\t1\tdel.txt\0" +
+      "1\t0\tmod.txt\0" +
+      "0\t0\t\0keep.txt\0moved.txt\0" +
+      "1\t0\tnew file.txt\0" +
+      "1\t1\ttc.txt\0" +
+      "2\t0\t\0src.txt\0copy.txt\0";
+    expect(parseCommitDetail(show([...HEADER, "msg\n"], records)).files).toEqual([
+      { path: "del.txt", change: "deleted", additions: 0, deletions: 1 },
+      { path: "mod.txt", change: "modified", additions: 1, deletions: 0 },
+      { path: "moved.txt", oldPath: "keep.txt", change: "renamed", additions: 0, deletions: 0 },
+      { path: "new file.txt", change: "added", additions: 1, deletions: 0 },
+      { path: "tc.txt", change: "type-changed", additions: 1, deletions: 1 },
+      { path: "copy.txt", oldPath: "src.txt", change: "copied", additions: 2, deletions: 0 },
     ]);
+  });
+
+  it("parses binary files", () => {
+    const detail = parseCommitDetail(show([...HEADER, "msg\n"], `${raw("A", "bin.dat")}-\t-\tbin.dat\0`));
+    expect(detail.files).toEqual([{ path: "bin.dat", change: "added", additions: null, deletions: null }]);
+  });
+
+  it("falls back when a stats entry has no raw record", () => {
+    const detail = parseCommitDetail(show([...HEADER, "msg\n"], "1\t1\ta.txt\0" + "0\t0\t\0b\0c\0"));
+    expect(detail.files.map((file) => file.change)).toEqual(["modified", "renamed"]);
   });
 
   it("parses a root commit without parents", () => {
     const header = [OID, "", ...HEADER.slice(2), "root\n"];
-    const detail = parseCommitDetail(`${header.join(F)}${R}\0\n1\t0\ta.txt\0`);
+    const detail = parseCommitDetail(show(header, `${raw("A", "a.txt")}1\t0\ta.txt\0`));
     expect(detail.parents).toEqual([]);
-    expect(detail.files).toEqual([{ path: "a.txt", additions: 1, deletions: 0 }]);
+    expect(detail.files).toEqual([{ path: "a.txt", change: "added", additions: 1, deletions: 0 }]);
   });
 
   it("parses a commit with no file changes", () => {

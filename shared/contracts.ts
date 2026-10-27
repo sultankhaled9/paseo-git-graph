@@ -84,8 +84,19 @@ export const repoStatusSchema = z.object({
 export type RepoStatus = z.infer<typeof repoStatusSchema>;
 export type WorktreeStatus = Omit<RepoStatus, "identity">;
 
+export const changeTypeSchema = z.enum([
+  "added",
+  "modified",
+  "deleted",
+  "renamed",
+  "copied",
+  "type-changed",
+]);
+export type ChangeType = z.infer<typeof changeTypeSchema>;
+
 export const fileChangeSchema = z.object({
   path: z.string(),
+  change: changeTypeSchema,
   oldPath: z.string().optional(),
   additions: z.number().int().nonnegative().nullable(),
   deletions: z.number().int().nonnegative().nullable(),

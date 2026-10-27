@@ -160,9 +160,32 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const selectCommit = useCallback((hash: string) => setSelection({ kind: "commit", hash }), []);
   const groups = useMemo(() => groupWorkInProgress(status.data?.files ?? []), [status.data?.files]);
 
+  // Any failed request that leaves required data missing must surface, not spin forever.
   const error = revision.error ?? status.error ?? sync.error;
-  if (error && !status.data) {
-    return <Text style={{ padding: SPACING.lg, color: colors.statusDanger, fontSize: FONT_SIZE.body }}>{error.message}</Text>;
+  if (error && (!status.data || !sync.data)) {
+    return (
+      <View style={{ flex: 1, padding: SPACING.lg, gap: SPACING.md, backgroundColor: colors.surface0 }}>
+        <Text style={{ color: colors.statusDanger, fontSize: FONT_SIZE.body }}>{error.message}</Text>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          onPress={() => {
+            void revision.refetch();
+            void status.refetch();
+            void sync.refetch();
+          }}
+          style={{
+            alignSelf: "flex-start",
+            paddingHorizontal: SPACING.md,
+            paddingVertical: SPACING.xs,
+            borderRadius: RADIUS.chip,
+            backgroundColor: colors.surface2,
+          }}
+        >
+          <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.small }}>Try again</Text>
+        </Pressable>
+      </View>
+    );
   }
   if (!status.data || !sync.data) {
     return (

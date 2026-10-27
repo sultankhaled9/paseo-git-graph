@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { type GraphCommit, type GraphEdge, layoutGraph } from "../shared/graph-layout";
+import {
+  type GraphCommit,
+  type GraphEdge,
+  layoutGraph,
+  WIP_NODE_ID,
+  withWorkInProgress,
+} from "../shared/graph-layout";
 
 function c(hash: string, ...parents: string[]): GraphCommit {
   return { hash, parents };
@@ -82,5 +88,20 @@ describe("layoutGraph", () => {
 
   it("returns an empty layout for no commits", () => {
     expect(layoutGraph([])).toEqual({ rows: [], laneCount: 0 });
+  });
+
+  it("connects work in progress to HEAD through newer commits on other branches", () => {
+    const commits = withWorkInProgress([c("other", "base"), c("head", "base"), c("base")], "head");
+    expect(commits[0]).toEqual({ hash: WIP_NODE_ID, parents: ["head"] });
+    const layout = layoutGraph(commits);
+    expect(layout.rows.map((row) => row.column)).toEqual([0, 1, 0, 0]);
+    expect(edgeKeys(layout.rows[0]?.edges ?? [])).toEqual(["bottom:0*"]);
+    expect(edgeKeys(layout.rows[1]?.edges ?? [])).toContain("top:0");
+    expect(edgeKeys(layout.rows[2]?.edges ?? [])).toContain("top:0*");
+  });
+
+  it("keeps work in progress unconnected in a repository without commits", () => {
+    const layout = layoutGraph(withWorkInProgress([], null));
+    expect(layout.rows).toEqual([{ column: 0, color: 0, edges: [] }]);
   });
 });

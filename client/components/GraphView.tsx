@@ -4,7 +4,11 @@ import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, type ListRenderItem, Pressable, Text, View } from "react-native";
 import { LOG_MAX_LIMIT, ROW_HEIGHT } from "../../shared/constants";
 import type { CommitSummary, RepoTarget } from "../../shared/contracts";
-import type { GraphRow as GraphRowLayout } from "../../shared/graph-layout";
+import {
+  type GraphRow as GraphRowLayout,
+  layoutGraph,
+  withWorkInProgress,
+} from "../../shared/graph-layout";
 import { useRepoGraph } from "../hooks/useRepoQueries";
 import { FONT_SIZE, RADIUS, SPACING } from "../tokens";
 import { CommitDetail } from "./CommitDetail";
@@ -40,15 +44,22 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     if (!open) setSelectedHash(null);
   }, []);
 
-  const items = useMemo<ListItem[]>(
-    () =>
-      repo.commits.flatMap((commit, index) => {
-        const row = repo.graph.rows[index];
-        return row ? [{ commit, row }] : [];
-      }),
-    [repo.commits, repo.graph],
+  const status = repo.status;
+  const showWip = status !== undefined && hasWorkInProgress(status);
+  const wipParent = status?.headOid ?? null;
+  const graph = useMemo(
+    () => layoutGraph(showWip ? withWorkInProgress(repo.commits, wipParent) : repo.commits),
+    [repo.commits, showWip, wipParent],
   );
-  const laneCount = Math.max(repo.graph.laneCount, 1);
+  const wipRow = showWip ? graph.rows[0] : undefined;
+  const items = useMemo<ListItem[]>(() => {
+    const commitRows = showWip ? graph.rows.slice(1) : graph.rows;
+    return repo.commits.flatMap((commit, index) => {
+      const row = commitRows[index];
+      return row ? [{ commit, row }] : [];
+    });
+  }, [repo.commits, graph, showWip]);
+  const laneCount = Math.max(graph.laneCount, 1);
   // The detail pane takes width from the list, so rows drop their author and date columns.
   const condensed = compact || selectedHash !== null;
 
@@ -67,8 +78,6 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     [laneCount, theme, condensed, selectedHash],
   );
 
-  const status = repo.status;
-  const showWip = status !== undefined && hasWorkInProgress(status);
   const headerHeight = showWip ? ROW_HEIGHT : 0;
   const getItemLayout = useCallback(
     (_: ArrayLike<ListItem> | null | undefined, index: number) => ({
@@ -78,17 +87,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     }),
     [headerHeight],
   );
-  const headItem = status?.headOid ? items.find((item) => item.commit.hash === status.headOid) : undefined;
   const header =
-    status && showWip ? (
-      <WipRow
-        status={status}
-        column={headItem?.row.column ?? 0}
-        color={headItem?.row.color ?? 0}
-        laneCount={laneCount}
-        theme={theme}
-      />
-    ) : null;
+    status && wipRow ? <WipRow status={status} row={wipRow} laneCount={laneCount} theme={theme} /> : null;
 
   const textStyle = { color: colors.foregroundMuted, fontSize: FONT_SIZE.body };
   const buttonStyle = {

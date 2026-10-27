@@ -3,15 +3,13 @@ import { memo } from "react";
 import { Text, View } from "react-native";
 import { ROW_HEIGHT } from "../../shared/constants";
 import type { RepoStatus } from "../../shared/contracts";
+import type { GraphRow } from "../../shared/graph-layout";
 import { FONT_SIZE, SPACING } from "../tokens";
 import { LaneCell } from "./LaneCell";
 
-const NO_EDGES: readonly never[] = [];
-
 interface WipRowProps {
   status: RepoStatus;
-  column: number;
-  color: number;
+  row: GraphRow;
   laneCount: number;
   theme: PluginTheme;
 }
@@ -20,8 +18,8 @@ export function hasWorkInProgress(status: RepoStatus): boolean {
   return status.staged + status.unstaged + status.untracked + status.conflicted > 0;
 }
 
-/** Uncommitted changes, drawn as a hollow node in the lane of the checked-out commit. */
-export const WipRow = memo(function WipRow({ status, column, color, laneCount, theme }: WipRowProps) {
+/** Uncommitted changes, drawn as a hollow node whose lane runs down to the checked-out commit. */
+export const WipRow = memo(function WipRow({ status, row, laneCount, theme }: WipRowProps) {
   const { colors } = theme;
   const parts = [
     { count: status.conflicted, label: "conflicted", color: colors.statusDanger },
@@ -40,7 +38,13 @@ export const WipRow = memo(function WipRow({ status, column, color, laneCount, t
         paddingHorizontal: SPACING.sm,
       }}
     >
-      <LaneCell column={column} color={color} edges={NO_EDGES} laneCount={laneCount} hollowFill={colors.surface0} />
+      <LaneCell
+        column={row.column}
+        color={row.color}
+        edges={row.edges}
+        laneCount={laneCount}
+        hollowFill={colors.surface0}
+      />
       <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.body, fontStyle: "italic" }}>WIP</Text>
       {parts.map((part) => (
         <Text key={part.label} style={{ color: part.color, fontSize: FONT_SIZE.small }}>

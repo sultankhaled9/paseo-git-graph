@@ -113,3 +113,14 @@ export function layoutGraph(commits: readonly GraphCommit[]): GraphLayout {
 
   return { rows, laneCount };
 }
+
+/** Commit hashes are hex, so this id can never collide with a real commit. */
+export const WIP_NODE_ID = "wip";
+
+/**
+ * Prepends uncommitted work as a virtual commit whose parent is HEAD, so the layout gives it
+ * its own lane and connects it to HEAD even when newer commits on other branches sit between.
+ */
+export function withWorkInProgress(commits: readonly GraphCommit[], headOid: string | null): GraphCommit[] {
+  return [{ hash: WIP_NODE_ID, parents: headOid ? [headOid] : [] }, ...commits];
+}

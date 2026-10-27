@@ -1,6 +1,6 @@
 import { useRpc } from "@getpaseo/plugin/client";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { LOG_MAX_LIMIT, LOG_PAGE_SIZE, REVISION_POLL_MS } from "../../shared/constants";
 import {
   commitRpc,
@@ -12,7 +12,6 @@ import {
   revisionRpc,
   statusRpc,
 } from "../../shared/contracts";
-import { layoutGraph } from "../../shared/graph-layout";
 
 const NO_COMMITS: readonly CommitSummary[] = [];
 
@@ -53,7 +52,6 @@ export function useRepoGraph(target: RepoTarget) {
   });
 
   const commits = log.data?.commits ?? NO_COMMITS;
-  const graph = useMemo(() => layoutGraph(commits), [commits]);
   const canLoadMore = (log.data?.hasMore ?? false) && limit < LOG_MAX_LIMIT;
   const loadMore = useCallback(() => {
     setLimit((current) => Math.min(current + LOG_PAGE_SIZE, LOG_MAX_LIMIT));
@@ -69,7 +67,6 @@ export function useRepoGraph(target: RepoTarget) {
 
   return {
     commits,
-    graph,
     status: status.data,
     error: revision.error ?? log.error ?? status.error,
     loading: revision.isPending || log.isPending,

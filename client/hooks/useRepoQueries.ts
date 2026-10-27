@@ -13,6 +13,7 @@ import {
   type RepoTarget,
   revisionRpc,
   statusRpc,
+  syncCommitsRpc,
   type WipArea,
   wipDiffRpc,
 } from "../../shared/contracts";
@@ -33,15 +34,14 @@ export function targetKey(target: RepoTarget): string {
 }
 
 /**
- * Polls cheap revision tokens and folds them into the log and status query keys, so a new
- * commit, ref move, or worktree edit refetches exactly the data it affects.
+ * The polled basics every repository view needs: cheap revision tokens, plus status and identity
+ * keyed by them, so a new commit, ref move, or worktree edit refetches exactly what it affects.
  */
-export function useRepoGraph(target: RepoTarget, scope: LogScope) {
+export function useRepoState(target: RepoTarget) {
   const fetchRevision = useRpc(revisionRpc);
-  const fetchLog = useRpc(logRpc);
   const fetchStatus = useRpc(statusRpc);
+  const fetchIdentity = useRpc(identityRpc);
   const key = targetKey(target);
-  const [limit, setLimit] = useState(LOG_PAGE_SIZE);
 
   const revision = useQuery({
     queryKey: ["git-graph", "revision", key],
@@ -50,14 +50,6 @@ export function useRepoGraph(target: RepoTarget, scope: LogScope) {
   });
   const tokens = revision.data;
 
-  const log = useQuery({
-    queryKey: ["git-graph", "log", key, scope, limit, tokens?.refsToken],
-    queryFn: () => fetchLog({ target, limit, scope }),
-    enabled: tokens !== undefined,
-    placeholderData: keepPreviousData,
-  });
-
-  const fetchIdentity = useRpc(identityRpc);
   const identity = useQuery({
     queryKey: ["git-graph", "identity", key, tokens?.worktreeToken],
     queryFn: () => fetchIdentity({ target }),
@@ -67,6 +59,22 @@ export function useRepoGraph(target: RepoTarget, scope: LogScope) {
   const status = useQuery({
     queryKey: ["git-graph", "status", key, tokens?.refsToken, tokens?.worktreeToken],
     queryFn: () => fetchStatus({ target }),
+    enabled: tokens !== undefined,
+    placeholderData: keepPreviousData,
+  });
+
+  return { key, tokens, revision, status, identity };
+}
+
+/** The commit history for the graph, on top of the shared repository state. */
+export function useRepoGraph(target: RepoTarget, scope: LogScope) {
+  const fetchLog = useRpc(logRpc);
+  const { key, tokens, revision, status, identity } = useRepoState(target);
+  const [limit, setLimit] = useState(LOG_PAGE_SIZE);
+
+  const log = useQuery({
+    queryKey: ["git-graph", "log", key, scope, limit, tokens?.refsToken],
+    queryFn: () => fetchLog({ target, limit, scope }),
     enabled: tokens !== undefined,
     placeholderData: keepPreviousData,
   });
@@ -149,5 +157,16 @@ export function useWipDiff(target: RepoTarget, selection: WipSelection | null, w
         ? previous
         : undefined,
     retry: false,
+  });
+}
+
+/** Commits only on this machine or only on the server; refreshed when any ref or upstream changes. */
+export function useSyncCommits(target: RepoTarget, refsToken: string | undefined) {
+  const fetchSync = useRpc(syncCommitsRpc);
+  return useQuery({
+    queryKey: ["git-graph", "sync", targetKey(target), refsToken],
+    queryFn: () => fetchSync({ target }),
+    enabled: refsToken !== undefined,
+    placeholderData: keepPreviousData,
   });
 }

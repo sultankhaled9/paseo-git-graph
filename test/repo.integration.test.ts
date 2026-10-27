@@ -122,6 +122,13 @@ describe("repository operations", () => {
     expect(text).toContain("+a");
   });
 
+  it("pairs both sides of a rename when given the old path", async () => {
+    const hash = git(repo, "rev-parse", "feature");
+    const { text } = await getDiff(repo, hash, "renamed.txt", "a.txt");
+    expect(text).toContain("rename from a.txt");
+    expect(text).toContain("rename to renamed.txt");
+  });
+
   it("rejects option-shaped revisions", async () => {
     await expect(getCommit(repo, "--output=/tmp/x")).rejects.toThrow();
   });

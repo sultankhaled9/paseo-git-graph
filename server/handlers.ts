@@ -55,10 +55,10 @@ export function createRepoHandlers(readProjects: ReadProjects) {
       return getCommit(await resolve(target, paseo), hash);
     },
     async diff(
-      { target, hash, path }: RpcInput<typeof diffRpc>,
+      { target, hash, path, oldPath }: RpcInput<typeof diffRpc>,
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof diffRpc>> {
-      return getDiff(await resolve(target, paseo), hash, path);
+      return getDiff(await resolve(target, paseo), hash, path, oldPath);
     },
     async revision(
       { target }: RpcInput<typeof revisionRpc>,

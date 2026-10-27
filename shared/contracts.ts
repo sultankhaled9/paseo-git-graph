@@ -128,17 +128,20 @@ export const commitRpc = defineRpc({
   output: commitDetailSchema,
 });
 
+const repoPathSchema = z
+  .string()
+  .min(1)
+  .refine((value) => !value.startsWith("/") && !value.includes("\0"), {
+    message: "Path must be repository-relative",
+  });
+
 export const diffRpc = defineRpc({
   name: "repo.diff",
   input: z.object({
     target: repoTargetSchema,
     hash: hashSchema,
-    path: z
-      .string()
-      .min(1)
-      .refine((value) => !value.startsWith("/") && !value.includes("\0"), {
-        message: "Path must be repository-relative",
-      }),
+    path: repoPathSchema,
+    oldPath: repoPathSchema.optional(),
   }),
   output: z.object({ text: z.string(), truncated: z.boolean() }),
 });

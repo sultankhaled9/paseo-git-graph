@@ -52,6 +52,7 @@ describe("contracts", () => {
     expect(diffRpc.input.safeParse({ target, hash, path: "src/a.ts" }).success).toBe(true);
     expect(diffRpc.input.safeParse({ target, hash, path: "/etc/passwd" }).success).toBe(false);
     expect(diffRpc.input.safeParse({ target, hash, path: "a\0b" }).success).toBe(false);
+    expect(diffRpc.input.safeParse({ target, hash, path: "b", oldPath: "/a" }).success).toBe(false);
   });
 
   it("requires a non-empty path to validate", () => {

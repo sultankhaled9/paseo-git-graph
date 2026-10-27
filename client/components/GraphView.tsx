@@ -1,5 +1,5 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { FlatList } from "@getpaseo/plugin/client/react-native";
+import { FlatList, Modal } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, type ListRenderItem, Pressable, Text, View } from "react-native";
 import { LOG_MAX_LIMIT, ROW_HEIGHT } from "../../shared/constants";
@@ -7,9 +7,14 @@ import type { CommitSummary, RepoTarget } from "../../shared/contracts";
 import type { GraphRow as GraphRowLayout } from "../../shared/graph-layout";
 import { useRepoGraph } from "../hooks/useRepoQueries";
 import { FONT_SIZE, RADIUS, SPACING } from "../tokens";
+import { CommitDetail } from "./CommitDetail";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
 import { hasWorkInProgress, WipRow } from "./WipRow";
+
+const LIST_FLEX = 3;
+const DETAIL_FLEX = 2;
+const DIVIDER_WIDTH = 1;
 
 interface ListItem {
   commit: CommitSummary;
@@ -30,6 +35,10 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   const { colors } = theme;
   const repo = useRepoGraph(target);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  const closeDetail = useCallback(() => setSelectedHash(null), []);
+  const onModalOpenChange = useCallback((open: boolean) => {
+    if (!open) setSelectedHash(null);
+  }, []);
 
   const items = useMemo<ListItem[]>(
     () =>
@@ -133,10 +142,40 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     );
   }
 
+  const detail =
+    selectedHash === null ? null : (
+      <CommitDetail
+        key={selectedHash}
+        target={target}
+        hash={selectedHash}
+        theme={theme}
+        onSelectCommit={setSelectedHash}
+        onClose={compact ? undefined : closeDetail}
+      />
+    );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
       {status ? <StatusBar status={status} theme={theme} /> : null}
-      {body}
+      {compact ? (
+        <>
+          {body}
+          <Modal title="Commit" open={detail !== null} onOpenChange={onModalOpenChange}>
+            <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0 }}>
+              {detail}
+            </Modal.Content>
+          </Modal>
+        </>
+      ) : (
+        <View style={{ flex: 1, flexDirection: "row" }}>
+          <View style={{ flex: LIST_FLEX }}>{body}</View>
+          {detail ? (
+            <View style={{ flex: DETAIL_FLEX, borderLeftWidth: DIVIDER_WIDTH, borderLeftColor: colors.border }}>
+              {detail}
+            </View>
+          ) : null}
+        </View>
+      )}
     </View>
   );
 }

@@ -55,7 +55,13 @@ export async function getCommit(root: string, hash: string): Promise<CommitDetai
   return parseCommitDetail(stdout);
 }
 
-export function getDiff(root: string, hash: string, path: string): Promise<CappedOutput> {
+/** Passing a rename's old path too lets git pair both sides instead of showing an addition. */
+export function getDiff(
+  root: string,
+  hash: string,
+  path: string,
+  oldPath?: string,
+): Promise<CappedOutput> {
   return runGitCapped(
     root,
     [
@@ -69,7 +75,7 @@ export function getDiff(root: string, hash: string, path: string): Promise<Cappe
       "--end-of-options",
       hash,
       "--",
-      path,
+      ...(oldPath ? [oldPath, path] : [path]),
     ],
     DIFF_MAX_BYTES,
   );

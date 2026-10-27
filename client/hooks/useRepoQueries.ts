@@ -3,7 +3,10 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { LOG_MAX_LIMIT, LOG_PAGE_SIZE, REVISION_POLL_MS } from "../../shared/constants";
 import {
+  commitRpc,
   type CommitSummary,
+  diffRpc,
+  type FileChange,
   logRpc,
   type RepoTarget,
   revisionRpc,
@@ -76,4 +79,25 @@ export function useRepoGraph(target: RepoTarget) {
     loadMore,
     retry,
   };
+}
+
+/** Commits are immutable, so detail and diffs never go stale for a given hash. */
+export function useCommitDetail(target: RepoTarget, hash: string) {
+  const fetchCommit = useRpc(commitRpc);
+  return useQuery({
+    queryKey: ["git-graph", "commit", targetKey(target), hash],
+    queryFn: () => fetchCommit({ target, hash }),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useFileDiff(target: RepoTarget, hash: string, file: FileChange | null) {
+  const fetchDiff = useRpc(diffRpc);
+  return useQuery({
+    queryKey: ["git-graph", "diff", targetKey(target), hash, file?.path, file?.oldPath],
+    queryFn: () =>
+      fetchDiff({ target, hash, path: file?.path ?? "", oldPath: file?.oldPath }),
+    enabled: file !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 }

@@ -3,7 +3,7 @@ import { copyText, FlatList, Icon, useToast } from "@getpaseo/plugin/client/reac
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, type ListRenderItem, Pressable, Text, View } from "react-native";
 import type { CommitDetail as CommitDetailData, FileChange, RepoTarget } from "../../shared/contracts";
-import { formatDate, shortHash } from "../format";
+import { formatDate, shortHash } from "../../shared/format";
 import { useCommitDetail, useFileDiff } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, MONO_FONT, RADIUS, SPACING } from "../tokens";
 import { DiffLine } from "./DiffView";

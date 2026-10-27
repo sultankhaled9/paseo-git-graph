@@ -16,8 +16,11 @@ import {
   layoutGraph,
   withWorkInProgress,
 } from "../../shared/graph-layout";
+import { isMine } from "../../shared/author";
+import { useNow } from "../hooks/useNow";
 import { useRepoGraph } from "../hooks/useRepoQueries";
 import { FONT_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
+import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
@@ -30,6 +33,7 @@ const DIVIDER_WIDTH = 1;
 interface ListItem {
   commit: CommitSummary;
   row: GraphRowLayout;
+  mine: boolean;
 }
 
 interface GraphViewProps {
@@ -45,6 +49,7 @@ function keyExtractor(item: ListItem): string {
 export function GraphView({ target, theme, compact }: GraphViewProps) {
   const { colors } = theme;
   const repo = useRepoGraph(target, "all");
+  const now = useNow();
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   // The panel can sit in the narrow Explorer of a wide window, so size from our own width.
   const [width, setWidth] = useState<number | null>(null);
@@ -65,13 +70,17 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     [repo.commits, showWip, wipParent],
   );
   const wipRow = showWip ? graph.rows[0] : undefined;
+  const identityName = status?.identity.name ?? null;
+  const identityEmail = status?.identity.email ?? null;
   const items = useMemo<ListItem[]>(() => {
+    const identity = { name: identityName, email: identityEmail };
     const commitRows = showWip ? graph.rows.slice(1) : graph.rows;
     return repo.commits.flatMap((commit, index) => {
       const row = commitRows[index];
-      return row ? [{ commit, row }] : [];
+      if (!row) return [];
+      return [{ commit, row, mine: isMine({ name: commit.authorName, email: commit.authorEmail }, identity) }];
     });
-  }, [repo.commits, graph, showWip]);
+  }, [repo.commits, graph, showWip, identityName, identityEmail]);
   const laneCount = Math.max(graph.laneCount, 1);
   // The detail pane takes width from the list, so rows drop their author and date columns.
   const condensed = narrow || selectedHash !== null;
@@ -85,10 +94,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         theme={theme}
         compact={condensed}
         selected={item.commit.hash === selectedHash}
+        mine={item.mine}
+        now={now}
         onSelect={setSelectedHash}
       />
     ),
-    [laneCount, theme, condensed, selectedHash],
+    [laneCount, theme, condensed, selectedHash, now],
   );
 
   const headerHeight = showWip ? ROW_HEIGHT : 0;
@@ -146,14 +157,18 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     body = <Text style={[textStyle, { padding: SPACING.lg }]}>No commits yet.</Text>;
   } else {
     body = (
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={keyExtractor}
-        getItemLayout={getItemLayout}
-        ListHeaderComponent={header}
-        ListFooterComponent={footer}
-      />
+      <View style={{ flex: 1 }}>
+        {condensed ? null : <ColumnHeader laneCount={laneCount} theme={theme} />}
+        <FlatList
+          style={{ flex: 1 }}
+          data={items}
+          renderItem={renderItem}
+          keyExtractor={keyExtractor}
+          getItemLayout={getItemLayout}
+          ListHeaderComponent={header}
+          ListFooterComponent={footer}
+        />
+      </View>
     );
   }
 

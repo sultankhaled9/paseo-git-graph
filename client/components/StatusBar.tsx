@@ -2,7 +2,7 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/react-native";
 import { Text, View } from "react-native";
 import type { RepoStatus } from "../../shared/contracts";
-import { shortHash } from "../format";
+import { shortHash } from "../../shared/format";
 import { FONT_SIZE, ICON_SIZE, SPACING } from "../tokens";
 
 const BORDER_WIDTH = 1;

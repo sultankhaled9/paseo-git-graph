@@ -13,7 +13,7 @@ export const MAX_PROJECTS = 100;
 export const PROJECT_NAME_MAX_LENGTH = 100;
 export const PROJECTS_SETTINGS_ID = "projects";
 
-export const ROW_HEIGHT = 32;
+export const ROW_HEIGHT = 36;
 export const LANE_WIDTH = 14;
 export const NODE_SIZE = 10;
 export const EDGE_THICKNESS = 2;

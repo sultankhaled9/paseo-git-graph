@@ -27,6 +27,7 @@ export default function contribute(client: PluginClientContext) {
     title: TITLE,
     icon: ICON,
     context: "workspace",
+    locations: ["workspace", "explorer"],
     Component: GitGraphPanel,
   });
   client.addCommandCenterItem({

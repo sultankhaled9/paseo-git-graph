@@ -8,6 +8,8 @@ export const AUTHOR_COLUMN_WIDTH = 140;
 export const DATE_COLUMN_WIDTH = 120;
 export const HASH_COLUMN_WIDTH = 64;
 export const MONO_FONT = "monospace";
+/** Below this width the graph drops metadata columns and shows commit detail in a modal. */
+export const NARROW_LAYOUT_WIDTH = 720;
 
 export function laneColor(color: number): string {
   return LANE_PALETTE[color % LANE_PALETTE.length];

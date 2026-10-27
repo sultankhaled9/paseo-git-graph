@@ -1,7 +1,14 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { FlatList, Modal } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, type ListRenderItem, Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  type LayoutChangeEvent,
+  type ListRenderItem,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
 import { LOG_MAX_LIMIT, ROW_HEIGHT } from "../../shared/constants";
 import type { CommitSummary, RepoTarget } from "../../shared/contracts";
 import {
@@ -10,7 +17,7 @@ import {
   withWorkInProgress,
 } from "../../shared/graph-layout";
 import { useRepoGraph } from "../hooks/useRepoQueries";
-import { FONT_SIZE, RADIUS, SPACING } from "../tokens";
+import { FONT_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
 import { CommitDetail } from "./CommitDetail";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
@@ -39,6 +46,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   const { colors } = theme;
   const repo = useRepoGraph(target);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
+  // The panel can sit in the narrow Explorer of a wide window, so size from our own width.
+  const [width, setWidth] = useState<number | null>(null);
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    setWidth(Math.round(event.nativeEvent.layout.width));
+  }, []);
+  const narrow = compact || (width !== null && width < NARROW_LAYOUT_WIDTH);
   const closeDetail = useCallback(() => setSelectedHash(null), []);
   const onModalOpenChange = useCallback((open: boolean) => {
     if (!open) setSelectedHash(null);
@@ -61,7 +74,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   }, [repo.commits, graph, showWip]);
   const laneCount = Math.max(graph.laneCount, 1);
   // The detail pane takes width from the list, so rows drop their author and date columns.
-  const condensed = compact || selectedHash !== null;
+  const condensed = narrow || selectedHash !== null;
 
   const renderItem = useCallback<ListRenderItem<ListItem>>(
     ({ item }) => (
@@ -152,14 +165,14 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         hash={selectedHash}
         theme={theme}
         onSelectCommit={setSelectedHash}
-        onClose={compact ? undefined : closeDetail}
+        onClose={narrow ? undefined : closeDetail}
       />
     );
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface0 }}>
+    <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
       {status ? <StatusBar status={status} theme={theme} /> : null}
-      {compact ? (
+      {narrow ? (
         <>
           {body}
           <Modal title="Commit" open={detail !== null} onOpenChange={onModalOpenChange}>

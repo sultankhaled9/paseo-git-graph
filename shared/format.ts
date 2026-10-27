@@ -61,3 +61,8 @@ export function stableHash(value: string): number {
   }
   return hash >>> 0;
 }
+
+/** "1 commit", "3 commits"; pass the plural when it is not the singular plus "s". */
+export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}

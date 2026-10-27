@@ -1,10 +1,6 @@
 import type { RepoStatus, StatusFile, WipArea } from "./contracts";
 import { STATUS_UNCHANGED as UNCHANGED } from "./constants";
-import { shortHash } from "./format";
-
-function commits(count: number): string {
-  return `${count} ${count === 1 ? "commit" : "commits"}`;
-}
+import { pluralize, shortHash } from "./format";
 
 export interface HeadDescription {
   lead: string;
@@ -23,8 +19,8 @@ export function describeHead(status: RepoStatus): HeadDescription {
   const { ahead, behind, upstream } = status;
   if (ahead === 0 && behind === 0) return { lead: "On", name, detail: `up to date with ${upstream}` };
   if (ahead > 0 && behind > 0) return { lead: "On", name, detail: `${ahead} ahead and ${behind} behind ${upstream}` };
-  if (ahead > 0) return { lead: "On", name, detail: `${commits(ahead)} ahead of ${upstream}` };
-  return { lead: "On", name, detail: `${commits(behind)} behind ${upstream}` };
+  if (ahead > 0) return { lead: "On", name, detail: `${pluralize(ahead, "commit")} ahead of ${upstream}` };
+  return { lead: "On", name, detail: `${pluralize(behind, "commit")} behind ${upstream}` };
 }
 
 export interface WipGroup {

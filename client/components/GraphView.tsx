@@ -133,22 +133,25 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   const previousMatch = useCallback(() => {
     if (matchIndices.length > 0) scrollToMatch((position - 1 + matchIndices.length) % matchIndices.length);
   }, [matchIndices.length, position, scrollToMatch]);
+  // A query or scope change asks for one jump to the first match once matching results are in;
+  // background refreshes leave the request unset, so they never move the view.
+  const pendingJump = useRef(false);
   const onQueryChange = useCallback((next: string) => {
+    pendingJump.current = true;
     setQuery(next);
     setMatchPosition(0);
   }, []);
   const onScopeChange = useCallback((next: LogScope) => {
+    pendingJump.current = true;
     setScope(next);
     setMatchPosition(0);
   }, []);
-  // Jump to the first match as the query changes; later list refreshes must not move the view.
-  const latestScroll = useRef(scrollToMatch);
+  const updating = repo.updating;
   useEffect(() => {
-    latestScroll.current = scrollToMatch;
-  });
-  useEffect(() => {
-    latestScroll.current(0);
-  }, [query]);
+    if (!pendingJump.current || updating) return;
+    pendingJump.current = false;
+    scrollToMatch(0);
+  }, [scrollToMatch, updating]);
   // The detail pane takes width from the list, so rows drop their author and date columns.
   const condensed = narrow || activeSelection !== null;
 

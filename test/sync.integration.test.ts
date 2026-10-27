@@ -96,6 +96,16 @@ describe("getSyncCommits", () => {
     expect(await getSyncCommits(local)).toMatchObject({ mode: "none", toPush: [], toPull: [] });
   });
 
+  it("does not treat a local branch as the server copy", async () => {
+    const local = join(base, "local-upstream");
+    execFileSync("git", ["-c", "init.defaultBranch=main", "init", "-q", local], { env: GIT_ENV });
+    commit(local, "base");
+    git(local, "checkout", "-q", "-b", "topic");
+    commit(local, "topic 1");
+    git(local, "branch", "-q", "--set-upstream-to=main");
+    expect(await getSyncCommits(local)).toMatchObject({ mode: "none", upstream: null, toPush: [], toPull: [] });
+  });
+
   it("returns empty lists for a repository without commits", async () => {
     const empty = join(base, "empty");
     execFileSync("git", ["-c", "init.defaultBranch=main", "init", "-q", empty], { env: GIT_ENV });

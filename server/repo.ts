@@ -161,7 +161,7 @@ export async function getWipDiff(root: string, path: string, area: WipArea): Pro
   }
 }
 
-const SHORT_REFNAME_PREFIX = "refs/remotes/";
+const REMOTE_REFS_PREFIX = "refs/remotes/";
 
 async function syncLog(root: string, revisions: readonly string[]): Promise<{ commits: CommitSummary[]; truncated: boolean }> {
   const stdout = await runGit(root, [
@@ -176,12 +176,15 @@ async function syncLog(root: string, revisions: readonly string[]): Promise<{ co
   return { commits: commits.slice(0, SYNC_COMMITS_LIMIT), truncated: commits.length > SYNC_COMMITS_LIMIT };
 }
 
-/** The branch's tracked remote branch, only if it is configured and has been fetched. */
+/**
+ * The branch's tracked remote branch, only if it is configured and has been fetched. A branch
+ * can also track another local branch; that is not a server copy, so it does not count.
+ */
 async function fetchedUpstream(root: string): Promise<string | null> {
   const branch = (await runGitOptional(root, ["symbolic-ref", "-q", "HEAD"])).trim();
   if (!branch) return null;
   const upstream = (await runGit(root, ["for-each-ref", "--format=%(upstream)", branch])).trim();
-  if (!upstream) return null;
+  if (!upstream.startsWith(REMOTE_REFS_PREFIX)) return null;
   return (await runGitOptional(root, ["rev-parse", "-q", "--verify", upstream])).trim() ? upstream : null;
 }
 
@@ -206,7 +209,7 @@ export async function getSyncCommits(root: string): Promise<SyncCommits> {
     ]);
     return {
       mode: "upstream",
-      upstream: upstream.startsWith(SHORT_REFNAME_PREFIX) ? upstream.slice(SHORT_REFNAME_PREFIX.length) : upstream,
+      upstream: upstream.startsWith(REMOTE_REFS_PREFIX) ? upstream.slice(REMOTE_REFS_PREFIX.length) : upstream,
       toPush: toPush.commits,
       toPull: toPull.commits,
       toPushTruncated: toPush.truncated,

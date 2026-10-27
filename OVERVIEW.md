@@ -8,6 +8,10 @@ Select a commit to see its full message, author and committer, parent commits, a
 
 Use the search box to find commits by message, author, or the start of a hash. Matching commits stay bright and the rest fade, so the graph keeps its lines; the arrows jump between matches. A toggle switches between all branches and only the branch you are on. The info button opens a legend that explains the shapes, labels, and colors.
 
+## My Changes
+
+A second tab, My Changes, explains in plain words everything that is only on your machine or only on the server. The top line sums it up, for example "3 files changed, 2 commits not pushed to origin/main, 1 commit to pull from origin/main", or "Everything is committed and in sync with origin/main". Below it, only the parts that apply are shown, each with a short explanation of what it means and the usual next step: files with conflicts, staged files ready to commit, changed files not staged yet, new untracked files, commits not pushed yet (or, on a branch that tracks no remote branch, commits no remote has yet), and commits to pull. Select a file to read its uncommitted diff, or a commit to see its details. Commits to pull reflect your last fetch; the plugin never fetches, commits, pushes, or pulls for you. Open it from a workspace's tabs, its Explorer, or "Show my changes for this workspace" in the Command Center. Like Git Graph, it finds the repositories inside a workspace folder that is not a repository itself.
+
 ## Where it appears
 
 - **Git Graph screen**: opened from the sidebar or with "Open Git Graph" in the Command Center. Use "Add repository" with an absolute path. A path to a repository adds that repository. A path to a folder that contains repositories (looked for two folders deep, for example `projects/api` and `projects/client/web`) shows how many it found and adds the folder as a group. The group stays in sync: it is rescanned every 30 seconds while the screen is open, when you come back to the window, and with its rescan button, so newly cloned repositories appear and deleted ones disappear. Hidden folders, `node_modules`, and symbolic links are skipped.
@@ -30,5 +34,6 @@ The plugin is read-only. It runs read-only git commands such as `git status`, `g
 - Diffs larger than 256 KB are cut off with a notice.
 - The uncommitted changes list shows up to 500 files; the counts stay exact.
 - Stash entries are not drawn in the graph.
+- My Changes lists up to 50 commits in each direction (to push, to pull).
 - A folder group lists up to 300 repositories. A repository tracked on its own and also inside a tracked folder appears in both places.
 - Very wide histories show up to 10 branch lanes side by side, or 4 in narrow views such as the Explorer; when the window is too narrow for every column, the author and date columns are hidden.

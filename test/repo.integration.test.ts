@@ -198,7 +198,7 @@ describe("repository identity", () => {
   it("reads the configured name and email", async () => {
     git(repo, "config", "user.name", "Ada Lovelace");
     git(repo, "config", "user.email", "Ada@Example.com");
-    expect((await getStatus(repo)).identity).toEqual({ name: "Ada Lovelace", email: "Ada@Example.com" });
+    expect(await getIdentity(repo)).toEqual({ name: "Ada Lovelace", email: "Ada@Example.com" });
   });
 
   it("changes the worktree token when only the identity changes", async () => {

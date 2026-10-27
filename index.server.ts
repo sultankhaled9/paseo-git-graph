@@ -5,6 +5,7 @@ import {
   commitRpc,
   diffRpc,
   folderReposRpc,
+  identityRpc,
   inspectPathRpc,
   logRpc,
   projectsSettings,
@@ -24,6 +25,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(inspectPathRpc, ({ path }) => inspectPath(path));
   server.handle(folderReposRpc, (input) => repo.folderRepos(input));
   server.handle(statusRpc, (input, { paseo }) => repo.status(input, paseo));
+  server.handle(identityRpc, (input, { paseo }) => repo.identity(input, paseo));
   server.handle(logRpc, (input, { paseo }) => repo.log(input, paseo));
   server.handle(commitRpc, (input, { paseo }) => repo.commit(input, paseo));
   server.handle(diffRpc, (input, { paseo }) => repo.diff(input, paseo));

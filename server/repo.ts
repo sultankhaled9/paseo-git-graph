@@ -43,8 +43,7 @@ export async function getIdentity(root: string): Promise<Identity> {
 }
 
 export async function getStatus(root: string): Promise<RepoStatus> {
-  const [stdout, identity] = await Promise.all([runGit(root, STATUS_ARGS), getIdentity(root)]);
-  return { ...parseStatus(stdout, root), identity };
+  return parseStatus(await runGit(root, STATUS_ARGS), root);
 }
 
 // Stash refs point at internal index and untracked commits that are noise in a history graph.
@@ -122,7 +121,7 @@ export async function getRevision(
     runGit(root, STATUS_ARGS),
     readIdentityConfig(root),
   ]);
-  // Identity rides on the worktree token because the status response carries it.
+  // Identity rides on the worktree token so a changed user.email refetches the identity query.
   return { refsToken: sha1(refs, symbolicHead, headOid), worktreeToken: sha1(status, identity) };
 }
 

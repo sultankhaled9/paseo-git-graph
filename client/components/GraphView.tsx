@@ -98,8 +98,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   const wipSelected = selectedHash === WIP_NODE_ID;
   const activeSelection = wipSelected && !showWip ? null : selectedHash;
   const selectWip = useCallback(() => setSelectedHash(WIP_NODE_ID), []);
-  const identityName = status?.identity.name ?? null;
-  const identityEmail = status?.identity.email ?? null;
+  const identityName = repo.identity?.name ?? null;
+  const identityEmail = repo.identity?.email ?? null;
   const items = useMemo<ListItem[]>(() => {
     const identity = { name: identityName, email: identityEmail };
     const commitRows = showWip ? graph.rows.slice(1) : graph.rows;
@@ -284,7 +284,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         target={target}
         hash={activeSelection}
         theme={theme}
-        identity={status?.identity}
+        identity={repo.identity}
         onSelectCommit={setSelectedHash}
         onClose={narrow ? undefined : closeDetail}
       />
@@ -310,7 +310,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
           }
         />
       ) : null}
-      {showLegend ? <Legend theme={theme} identity={status?.identity} /> : null}
+      {showLegend ? <Legend theme={theme} identity={repo.identity} /> : null}
       <SearchBar
         theme={theme}
         query={query}

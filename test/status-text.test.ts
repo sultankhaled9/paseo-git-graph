@@ -7,7 +7,6 @@ const OID = "0123456789abcdef0123456789abcdef01234567";
 function status(overrides: Partial<RepoStatus>): RepoStatus {
   return {
     root: "/r",
-    identity: { name: null, email: null },
     branch: "main",
     headOid: OID,
     detached: false,

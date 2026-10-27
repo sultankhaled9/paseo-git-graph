@@ -51,6 +51,12 @@ describe("repo handlers", () => {
     expect(status).toMatchObject({ root: repo, branch: "main" });
   });
 
+  it("serve the configured identity apart from status", async () => {
+    execFileSync("git", ["config", "user.email", "ada@example.com"], { cwd: repo, env: GIT_ENV });
+    const identity = await handlers.identity({ target: { kind: "project", projectId: "p" } }, lookup({}));
+    expect(identity.email).toBe("ada@example.com");
+  });
+
   it("reject workspaces without a directory", async () => {
     const paseo = lookup({ w: { projectKind: "git" } });
     await expect(

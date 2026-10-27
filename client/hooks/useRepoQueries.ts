@@ -6,6 +6,7 @@ import {
   commitRpc,
   type CommitSummary,
   diffRpc,
+  identityRpc,
   type FileChange,
   type LogScope,
   logRpc,
@@ -54,6 +55,13 @@ export function useRepoGraph(target: RepoTarget, scope: LogScope) {
     placeholderData: keepPreviousData,
   });
 
+  const fetchIdentity = useRpc(identityRpc);
+  const identity = useQuery({
+    queryKey: ["git-graph", "identity", key, tokens?.worktreeToken],
+    queryFn: () => fetchIdentity({ target }),
+    placeholderData: keepPreviousData,
+  });
+
   const status = useQuery({
     queryKey: ["git-graph", "status", key, tokens?.refsToken, tokens?.worktreeToken],
     queryFn: () => fetchStatus({ target }),
@@ -78,6 +86,7 @@ export function useRepoGraph(target: RepoTarget, scope: LogScope) {
   return {
     commits,
     status: status.data,
+    identity: identity.data,
     worktreeToken: tokens?.worktreeToken,
     error: revision.error ?? log.error ?? status.error,
     loading: revision.isPending || log.isPending,

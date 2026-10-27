@@ -98,7 +98,6 @@ export type Identity = z.infer<typeof identitySchema>;
 
 export const repoStatusSchema = z.object({
   root: z.string(),
-  identity: identitySchema,
   branch: z.string().nullable(),
   headOid: z.string().nullable(),
   detached: z.boolean(),
@@ -113,7 +112,6 @@ export const repoStatusSchema = z.object({
   filesTruncated: z.boolean(),
 });
 export type RepoStatus = z.infer<typeof repoStatusSchema>;
-export type WorktreeStatus = Omit<RepoStatus, "identity">;
 
 export const changeTypeSchema = z.enum([
   "added",
@@ -233,6 +231,13 @@ export const wipDiffRpc = defineRpc({
   name: "repo.wip-diff",
   input: z.object({ target: repoTargetSchema, path: repoPathSchema, area: wipAreaSchema }),
   output: z.object({ text: z.string(), truncated: z.boolean() }),
+});
+
+/** The repository's configured git identity, kept apart from status because status is slow on large trees. */
+export const identityRpc = defineRpc({
+  name: "repo.identity",
+  input: z.object({ target: repoTargetSchema }),
+  output: identitySchema,
 });
 
 export const revisionRpc = defineRpc({

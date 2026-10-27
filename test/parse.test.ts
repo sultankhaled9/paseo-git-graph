@@ -1,0 +1,192 @@
+import { describe, expect, it } from "vitest";
+import { STATUS_MAX_FILES } from "../shared/constants";
+import { parseCommitDetail, parseLog, parseRefs, parseStatus } from "../server/parse";
+
+const F = "\x1f";
+const R = "\x1e";
+const OID = "a335eb982dc36af7dcb65678a023d9bcbafa7b2c";
+const OID2 = "b68fde2a051d9af2fe3ff4c96c0898e5a3212e4d";
+const MODES = "100644 100644 100644";
+
+function logRecord(fields: readonly string[]): string {
+  return `${fields.join(F)}${R}\n`;
+}
+
+describe("parseRefs", () => {
+  it("marks the branch HEAD points at as current", () => {
+    expect(parseRefs("HEAD -> refs/heads/main, refs/heads/feature")).toEqual([
+      { name: "main", kind: "branch", isCurrent: true },
+      { name: "feature", kind: "branch", isCurrent: false },
+    ]);
+  });
+
+  it("classifies remotes, tags, detached HEAD and other refs, skipping remote HEAD", () => {
+    expect(
+      parseRefs("HEAD, refs/remotes/origin/main, refs/remotes/origin/HEAD, tag: refs/tags/v1.0, refs/notes/x"),
+    ).toEqual([
+      { name: "HEAD", kind: "head", isCurrent: true },
+      { name: "origin/main", kind: "remote", isCurrent: false },
+      { name: "v1.0", kind: "tag", isCurrent: false },
+      { name: "notes/x", kind: "other", isCurrent: false },
+    ]);
+  });
+
+  it("returns nothing for an undecorated commit", () => {
+    expect(parseRefs("")).toEqual([]);
+  });
+});
+
+describe("parseLog", () => {
+  it("keeps separators and unicode inside subjects", () => {
+    const stdout =
+      logRecord([OID, OID2, "Zoë", "z@x", "2026-10-27T10:00:00+03:00", "HEAD -> refs/heads/main", "fix | pipe ✓"]) +
+      logRecord([OID2, "", "A", "a@x", "2026-10-26T10:00:00+03:00", "", "root"]);
+    expect(parseLog(stdout)).toEqual([
+      {
+        hash: OID,
+        parents: [OID2],
+        authorName: "Zoë",
+        authorEmail: "z@x",
+        authorDate: "2026-10-27T10:00:00+03:00",
+        refs: [{ name: "main", kind: "branch", isCurrent: true }],
+        subject: "fix | pipe ✓",
+      },
+      {
+        hash: OID2,
+        parents: [],
+        authorName: "A",
+        authorEmail: "a@x",
+        authorDate: "2026-10-26T10:00:00+03:00",
+        refs: [],
+        subject: "root",
+      },
+    ]);
+  });
+
+  it("splits merge parents", () => {
+    const [commit] = parseLog(logRecord([OID, `${OID2} ${OID2}`, "A", "a@x", "d", "", "merge"]));
+    expect(commit?.parents).toEqual([OID2, OID2]);
+  });
+
+  it("returns an empty list for an empty repository", () => {
+    expect(parseLog("")).toEqual([]);
+  });
+});
+
+function status(...tokens: readonly string[]): string {
+  return `${tokens.join("\0")}\0`;
+}
+
+describe("parseStatus", () => {
+  it("handles a repository with no commits", () => {
+    const result = parseStatus(status("# branch.oid (initial)", "# branch.head main", "? new.txt"), "/r");
+    expect(result).toMatchObject({
+      root: "/r",
+      headOid: null,
+      branch: "main",
+      detached: false,
+      upstream: null,
+      untracked: 1,
+      files: [{ path: "new.txt", index: "?", worktree: "?", kind: "untracked" }],
+    });
+  });
+
+  it("reports detached HEAD", () => {
+    const result = parseStatus(status(`# branch.oid ${OID}`, "# branch.head (detached)"), "/r");
+    expect(result).toMatchObject({ headOid: OID, branch: null, detached: true });
+  });
+
+  it("reads upstream and ahead/behind", () => {
+    const result = parseStatus(
+      status(`# branch.oid ${OID}`, "# branch.head main", "# branch.upstream origin/main", "# branch.ab +3 -2"),
+      "/r",
+    );
+    expect(result).toMatchObject({ upstream: "origin/main", ahead: 3, behind: 2 });
+  });
+
+  it("counts staged and unstaged sides and keeps paths with spaces", () => {
+    const result = parseStatus(
+      status(
+        `# branch.oid ${OID}`,
+        "# branch.head main",
+        `1 MM N... ${MODES} ${OID} ${OID2} dir/with space.txt`,
+        `1 .M N... ${MODES} ${OID} ${OID} only-worktree.txt`,
+      ),
+      "/r",
+    );
+    expect(result).toMatchObject({ staged: 1, unstaged: 2 });
+    expect(result.files.map((file) => file.path)).toEqual(["dir/with space.txt", "only-worktree.txt"]);
+  });
+
+  it("reads rename entries and their original path", () => {
+    const result = parseStatus(
+      status(`# branch.oid ${OID}`, "# branch.head main", `2 R. N... ${MODES} ${OID} ${OID} R100 k 2.txt`, "k.txt"),
+      "/r",
+    );
+    expect(result.files).toEqual([
+      { path: "k 2.txt", origPath: "k.txt", index: "R", worktree: ".", kind: "renamed" },
+    ]);
+    expect(result.staged).toBe(1);
+  });
+
+  it("counts unmerged entries as conflicts", () => {
+    const result = parseStatus(
+      status(`# branch.oid ${OID}`, "# branch.head main", `u UU N... ${MODES} 100644 ${OID} ${OID} ${OID} both.txt`),
+      "/r",
+    );
+    expect(result).toMatchObject({ conflicted: 1, staged: 0, unstaged: 0 });
+    expect(result.files[0]).toEqual({ path: "both.txt", index: "U", worktree: "U", kind: "unmerged" });
+  });
+
+  it("caps the file list but keeps exact counts", () => {
+    const extra = 5;
+    const entries = Array.from({ length: STATUS_MAX_FILES + extra }, (_, index) => `? f${index}`);
+    const result = parseStatus(status("# branch.oid (initial)", "# branch.head main", ...entries), "/r");
+    expect(result.untracked).toBe(STATUS_MAX_FILES + extra);
+    expect(result.files).toHaveLength(STATUS_MAX_FILES);
+    expect(result.filesTruncated).toBe(true);
+  });
+});
+
+function show(header: readonly string[], numstat: string): string {
+  return `${header.join(F)}${R}\0\n${numstat}`;
+}
+
+const HEADER = [OID, OID2, "A", "a@x", "2026-10-27T10:00:00Z", "C", "c@x", "2026-10-27T11:00:00Z"];
+
+describe("parseCommitDetail", () => {
+  it("parses metadata, message, and plain stats", () => {
+    const detail = parseCommitDetail(show([...HEADER, "subject\n\nbody line\n"], "3\t1\tsrc/a.ts\0"));
+    expect(detail).toMatchObject({
+      hash: OID,
+      parents: [OID2],
+      committerName: "C",
+      committerDate: "2026-10-27T11:00:00Z",
+      message: "subject\n\nbody line",
+      files: [{ path: "src/a.ts", additions: 3, deletions: 1 }],
+    });
+  });
+
+  it("parses renames and binary files", () => {
+    const detail = parseCommitDetail(show([...HEADER, "msg\n"], "0\t0\t\0a.txt\0b.txt\0-\t-\tbin.dat\0"));
+    expect(detail.files).toEqual([
+      { path: "b.txt", oldPath: "a.txt", additions: 0, deletions: 0 },
+      { path: "bin.dat", additions: null, deletions: null },
+    ]);
+  });
+
+  it("parses a root commit without parents", () => {
+    const header = [OID, "", ...HEADER.slice(2), "root\n"];
+    const detail = parseCommitDetail(`${header.join(F)}${R}\0\n1\t0\ta.txt\0`);
+    expect(detail.parents).toEqual([]);
+    expect(detail.files).toEqual([{ path: "a.txt", additions: 1, deletions: 0 }]);
+  });
+
+  it("parses a commit with no file changes", () => {
+    expect(parseCommitDetail(`${[...HEADER, "empty\n"].join(F)}${R}`).files).toEqual([]);
+  });
+
+  it("rejects output without a header", () => {
+    expect(() => parseCommitDetail("garbage")).toThrow();
+  });
+});

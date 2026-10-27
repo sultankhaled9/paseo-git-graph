@@ -5,6 +5,7 @@ export const GIT_TIMEOUT_MS = 15_000;
 export const GIT_MAX_BUFFER_BYTES = 32 * 1024 * 1024;
 export const DIFF_MAX_BYTES = 256 * 1024;
 export const STATUS_MAX_FILES = 500;
+export const GIT_STDERR_MAX_CHARS = 64 * 1024;
 
 export const REVISION_POLL_MS = 3_000;
 

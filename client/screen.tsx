@@ -2,11 +2,12 @@ import type { PluginScreenProps } from "@getpaseo/plugin/client";
 import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import type { Project, RepoTarget } from "../shared/contracts";
+import type { Folder, Project, RepoTarget } from "../shared/contracts";
 import { AddProjectForm } from "./components/AddProjectForm";
 import { GraphView } from "./components/GraphView";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { targetKey } from "./hooks/useRepoQueries";
+import { type FolderScan, useFolderScans } from "./hooks/useFolderRepos";
 import { useProjects } from "./hooks/useProjects";
 import { FONT_SIZE, ICON_SIZE, RADIUS, SPACING } from "./tokens";
 
@@ -14,25 +15,60 @@ const SIDEBAR_WIDTH = 280;
 const DIVIDER_WIDTH = 1;
 const COMPACT_PICKER_MAX_HEIGHT = 240;
 
+/**
+ * The selection while it still exists. A repository missing from its folder only counts as gone
+ * after a successful rescan, so a slow or failed scan never drops what the user is looking at.
+ */
+function stillAvailable(
+  selection: RepoTarget | null,
+  projects: readonly Project[],
+  folderScans: readonly FolderScan[],
+): RepoTarget | null {
+  if (!selection) return null;
+  switch (selection.kind) {
+    case "project":
+      return projects.some((project) => project.id === selection.projectId) ? selection : null;
+    case "folder-repo": {
+      const scan = folderScans.find((candidate) => candidate.folder.id === selection.folderId);
+      if (!scan) return null;
+      if (!scan.scanned) return selection;
+      return scan.repos.some((repo) => repo.relativePath === selection.relativePath) ? selection : null;
+    }
+    case "workspace":
+      return null;
+  }
+}
+
 export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
   const { colors } = theme;
   const toast = useToast();
   const projects = useProjects();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const folderScans = useFolderScans(projects.folders);
+  const [selection, setSelection] = useState<RepoTarget | null>(null);
   const [adding, setAdding] = useState(false);
-  const onAdded = useCallback((projectId: string) => {
-    setSelectedId(projectId);
+  const onAdded = useCallback((target: RepoTarget | null) => {
+    if (target) setSelection(target);
     setAdding(false);
   }, []);
-  const selected = projects.projects.find((project) => project.id === selectedId) ?? projects.projects[0];
-  const selectedProjectId = selected?.id ?? null;
-  const target = useMemo<RepoTarget | null>(
-    () => (selectedProjectId ? { kind: "project", projectId: selectedProjectId } : null),
-    [selectedProjectId],
-  );
 
-  const { remove } = projects;
-  const onRemove = useCallback(
+  const available: RepoTarget[] = [
+    ...projects.projects.map((project): RepoTarget => ({ kind: "project", projectId: project.id })),
+    ...folderScans.flatMap((scan) =>
+      scan.repos.map((repo): RepoTarget => ({
+        kind: "folder-repo",
+        folderId: scan.folder.id,
+        relativePath: repo.relativePath,
+      })),
+    ),
+  ];
+  const target = stillAvailable(selection, projects.projects, folderScans) ?? available[0] ?? null;
+  const selectedKey = target ? targetKey(target) : null;
+  // `available` is rebuilt every render; keying on the target's identity string keeps the
+  // object stable for GraphView until the selection really changes.
+  const stableTarget = useMemo(() => target, [selectedKey]);
+
+  const { remove, removeFolder } = projects;
+  const onRemoveProject = useCallback(
     (project: Project) => {
       void remove(project.id).then((removed) => {
         if (removed) toast.show(`Stopped tracking ${project.name}`);
@@ -40,6 +76,15 @@ export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
       });
     },
     [remove, toast],
+  );
+  const onRemoveFolder = useCallback(
+    (folder: Folder) => {
+      void removeFolder(folder.id).then((removed) => {
+        if (removed) toast.show(`Stopped tracking folder ${folder.name}`);
+        else toast.error("Projects changed elsewhere. Try again.");
+      });
+    },
+    [removeFolder, toast],
   );
 
   if (projects.status === "loading") {
@@ -61,13 +106,15 @@ export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
     <>
       <ProjectSwitcher
         projects={projects.projects}
-        selectedId={selectedProjectId}
+        folderScans={folderScans}
+        selectedKey={selectedKey}
         theme={theme}
         compact={layout.compact}
-        onSelect={setSelectedId}
-        onRemove={onRemove}
+        onSelect={setSelection}
+        onRemoveProject={onRemoveProject}
+        onRemoveFolder={onRemoveFolder}
       />
-      {projects.projects.length > 0 ? (
+      {projects.projects.length + projects.folders.length > 0 ? (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={adding ? "Cancel adding a repository" : "Add repository"}
@@ -90,16 +137,22 @@ export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
           </Text>
         </Pressable>
       ) : null}
-      {adding || projects.projects.length === 0 ? (
-        <AddProjectForm theme={theme} onAdd={projects.add} onAdded={onAdded} />
+      {adding || projects.projects.length + projects.folders.length === 0 ? (
+        <AddProjectForm
+          theme={theme}
+          onInspect={projects.inspect}
+          onAddRepo={projects.add}
+          onAddFolder={projects.addFolder}
+          onAdded={onAdded}
+        />
       ) : null}
     </>
   );
-  const graph = target ? (
-    <GraphView key={targetKey(target)} target={target} theme={theme} compact={layout.compact} />
+  const graph = stableTarget ? (
+    <GraphView key={selectedKey} target={stableTarget} theme={theme} compact={layout.compact} />
   ) : (
     <Text style={{ padding: SPACING.lg, color: colors.foregroundMuted, fontSize: FONT_SIZE.body }}>
-      Add a repository to see its commit graph.
+      Add a repository, or a folder of repositories, to see a commit graph.
     </Text>
   );
 

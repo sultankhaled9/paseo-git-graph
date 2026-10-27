@@ -8,7 +8,6 @@ import {
   type Project,
   type ProjectsDocument,
   projectsSettings,
-  validatePathRpc,
 } from "../../shared/contracts";
 import { withChanges } from "../../shared/projects-document";
 
@@ -20,18 +19,18 @@ const NO_FOLDERS: readonly Folder[] = [];
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: string };
 export type AddFolderResult = { ok: true; folder: Folder } | { ok: false; reason: string };
 export type FolderInspection = Extract<InspectPathOutput, { kind: "folder" }>;
+export type RepoInspection = Extract<InspectPathOutput, { kind: "repo" }>;
 
 function newProjectId(): string {
   return `${Date.now().toString(ID_RADIX)}${Math.random().toString(ID_RADIX).slice(RANDOM_PREFIX_LENGTH)}`;
 }
 
 /**
- * The manual project list. The daemon validates and canonicalizes each path; the client
- * saves the list because plugin settings are only writable from the app.
+ * Tracked repositories and folders. The daemon inspects and canonicalizes each path; the client
+ * saves the lists because plugin settings are only writable from the app.
  */
 export function useProjects() {
   const settings = useSettings(projectsSettings);
-  const validatePath = useRpc(validatePathRpc);
   const inspect = useRpc(inspectPathRpc);
   const ready = settings.status === "ready";
   const projects = ready ? settings.values.projects : NO_PROJECTS;
@@ -50,26 +49,24 @@ export function useProjects() {
   );
 
   const add = useCallback(
-    async (path: string, name: string): Promise<AddProjectResult> => {
+    async (inspection: RepoInspection, name: string): Promise<AddProjectResult> => {
       if (revision === null) return { ok: false, reason: "Projects are still loading" };
       if (projects.length >= MAX_PROJECTS) {
         return { ok: false, reason: `You can track up to ${MAX_PROJECTS} repositories` };
       }
-      const result = await validatePath({ path: path.trim() });
-      if (!result.ok) return result;
-      if (projects.some((project) => project.path === result.path)) {
+      if (projects.some((project) => project.path === inspection.path)) {
         return { ok: false, reason: "This repository is already tracked" };
       }
       const project: Project = {
         id: newProjectId(),
-        name: (name.trim() || result.suggestedName).slice(0, PROJECT_NAME_MAX_LENGTH),
-        path: result.path,
+        name: (name.trim() || inspection.suggestedName).slice(0, PROJECT_NAME_MAX_LENGTH),
+        path: inspection.path,
       };
       return (await persist({ projects: [...projects, project] }))
         ? { ok: true, project }
         : { ok: false, reason: "Projects changed elsewhere. Try again." };
     },
-    [revision, projects, validatePath, persist],
+    [revision, projects, persist],
   );
 
   const addFolder = useCallback(

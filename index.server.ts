@@ -1,6 +1,6 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { createRepoHandlers } from "./server/handlers";
-import { inspectPath, validateRepoPath } from "./server/repo-guard";
+import { inspectPath } from "./server/repo-guard";
 import {
   commitRpc,
   diffRpc,
@@ -10,7 +10,6 @@ import {
   projectsSettings,
   revisionRpc,
   statusRpc,
-  validatePathRpc,
   wipDiffRpc,
 } from "./shared/contracts";
 
@@ -22,7 +21,6 @@ export default function contribute(server: PluginServerContext) {
     return state.values;
   });
 
-  server.handle(validatePathRpc, ({ path }) => validateRepoPath(path));
   server.handle(inspectPathRpc, ({ path }) => inspectPath(path));
   server.handle(folderReposRpc, (input) => repo.folderRepos(input));
   server.handle(statusRpc, (input, { paseo }) => repo.status(input, paseo));

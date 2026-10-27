@@ -183,12 +183,6 @@ const validatePathOutputSchema = z.discriminatedUnion("ok", [
 ]);
 export type ValidatePathOutput = z.infer<typeof validatePathOutputSchema>;
 
-export const validatePathRpc = defineRpc({
-  name: "repo.validate-path",
-  input: z.object({ path: z.string().min(1) }),
-  output: validatePathOutputSchema,
-});
-
 export const statusRpc = defineRpc({
   name: "repo.status",
   input: z.object({ target: repoTargetSchema }),

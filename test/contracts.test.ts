@@ -10,7 +10,6 @@ import {
   projectsSettings,
   revisionRpc,
   statusRpc,
-  validatePathRpc,
 } from "../shared/contracts";
 
 const target = { kind: "project", projectId: "p1" } as const;
@@ -82,7 +81,4 @@ describe("contracts", () => {
     expect(diffRpc.input.safeParse({ target, hash, path: "b", oldPath: "/a" }).success).toBe(false);
   });
 
-  it("requires a non-empty path to validate", () => {
-    expect(validatePathRpc.input.safeParse({ path: "" }).success).toBe(false);
-  });
 });

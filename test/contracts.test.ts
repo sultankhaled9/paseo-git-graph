@@ -36,9 +36,15 @@ describe("contracts", () => {
   });
 
   it("bounds the log limit", () => {
-    expect(logRpc.input.safeParse({ target, limit: 1 }).success).toBe(true);
-    expect(logRpc.input.safeParse({ target, limit: 0 }).success).toBe(false);
-    expect(logRpc.input.safeParse({ target, limit: LOG_MAX_LIMIT + 1 }).success).toBe(false);
+    expect(logRpc.input.safeParse({ target, limit: 1, scope: "all" }).success).toBe(true);
+    expect(logRpc.input.safeParse({ target, limit: 0, scope: "all" }).success).toBe(false);
+    expect(logRpc.input.safeParse({ target, limit: LOG_MAX_LIMIT + 1, scope: "all" }).success).toBe(false);
+  });
+
+  it("requires a known log scope", () => {
+    expect(logRpc.input.safeParse({ target, limit: 1, scope: "head" }).success).toBe(true);
+    expect(logRpc.input.safeParse({ target, limit: 1, scope: "remote" }).success).toBe(false);
+    expect(logRpc.input.safeParse({ target, limit: 1 }).success).toBe(false);
   });
 
   it("validates commit hashes", () => {

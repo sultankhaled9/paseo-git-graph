@@ -76,7 +76,7 @@ afterAll(async () => {
 
 describe("repository operations", () => {
   it("returns topo-ordered history with refs and merge parents", async () => {
-    const { commits, hasMore } = await getLog(repo, 10);
+    const { commits, hasMore } = await getLog(repo, 10, "all");
     expect(hasMore).toBe(false);
     expect(commits.map((commit) => commit.subject)).toEqual([
       "merge feature",
@@ -92,7 +92,7 @@ describe("repository operations", () => {
   });
 
   it("reports hasMore when the limit cuts history", async () => {
-    const { commits, hasMore } = await getLog(repo, SMALL_LIMIT);
+    const { commits, hasMore } = await getLog(repo, SMALL_LIMIT, "all");
     expect(commits).toHaveLength(SMALL_LIMIT);
     expect(hasMore).toBe(true);
   });
@@ -100,14 +100,25 @@ describe("repository operations", () => {
   it("excludes stash commits from history", async () => {
     await writeFile(join(repo, "a-stash.txt"), "x\n");
     git(repo, "stash", "push", "-qu");
-    const { commits } = await getLog(repo, 50);
+    const { commits } = await getLog(repo, 50, "all");
     git(repo, "stash", "pop", "-q");
     await rm(join(repo, "a-stash.txt"));
     expect(commits).toHaveLength(4);
   });
 
+  it("limits history to the checked-out branch in head scope", async () => {
+    git(repo, "checkout", "-q", "feature");
+    const { commits } = await getLog(repo, 10, "head");
+    git(repo, "checkout", "-q", "main");
+    expect(commits.map((commit) => commit.subject)).toEqual(["rename and binary", "root | with pipe"]);
+  });
+
+  it("returns no head-scoped history for a repository without commits", async () => {
+    expect(await getLog(otherRepo, 10, "head")).toEqual({ commits: [], hasMore: false });
+  });
+
   it("returns an empty history for a repository without commits", async () => {
-    expect(await getLog(otherRepo, 10)).toEqual({ commits: [], hasMore: false });
+    expect(await getLog(otherRepo, 10, "all")).toEqual({ commits: [], hasMore: false });
   });
 
   it("returns commit detail with renames and binary stats", async () => {

@@ -41,7 +41,7 @@ describe("repo handlers", () => {
   const handlers = createRepoHandlers(async () => [{ id: "p", name: "Repo", path: repo }]);
 
   it("serve a saved project", async () => {
-    const result = await handlers.log({ target: { kind: "project", projectId: "p" }, limit: 5 }, lookup({}));
+    const result = await handlers.log({ target: { kind: "project", projectId: "p" }, limit: 5, scope: "all" }, lookup({}));
     expect(result.commits.map((commit) => commit.subject)).toEqual(["first"]);
   });
 

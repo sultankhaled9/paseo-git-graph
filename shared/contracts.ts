@@ -124,9 +124,16 @@ export const statusRpc = defineRpc({
   output: repoStatusSchema,
 });
 
+export const logScopeSchema = z.enum(["all", "head"]);
+export type LogScope = z.infer<typeof logScopeSchema>;
+
 export const logRpc = defineRpc({
   name: "repo.log",
-  input: z.object({ target: repoTargetSchema, limit: z.number().int().min(1).max(LOG_MAX_LIMIT) }),
+  input: z.object({
+    target: repoTargetSchema,
+    limit: z.number().int().min(1).max(LOG_MAX_LIMIT),
+    scope: logScopeSchema,
+  }),
   output: z.object({ commits: z.array(commitSummarySchema), hasMore: z.boolean() }),
 });
 

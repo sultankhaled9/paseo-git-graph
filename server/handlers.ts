@@ -43,10 +43,10 @@ export function createRepoHandlers(readProjects: ReadProjects) {
       return getStatus(await resolve(target, paseo));
     },
     async log(
-      { target, limit }: RpcInput<typeof logRpc>,
+      { target, limit, scope }: RpcInput<typeof logRpc>,
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof logRpc>> {
-      return getLog(await resolve(target, paseo), limit);
+      return getLog(await resolve(target, paseo), limit, scope);
     },
     async commit(
       { target, hash }: RpcInput<typeof commitRpc>,

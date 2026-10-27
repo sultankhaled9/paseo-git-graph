@@ -7,6 +7,7 @@ import {
   type CommitSummary,
   diffRpc,
   type FileChange,
+  type LogScope,
   logRpc,
   type RepoTarget,
   revisionRpc,
@@ -23,7 +24,7 @@ export function targetKey(target: RepoTarget): string {
  * Polls cheap revision tokens and folds them into the log and status query keys, so a new
  * commit, ref move, or worktree edit refetches exactly the data it affects.
  */
-export function useRepoGraph(target: RepoTarget) {
+export function useRepoGraph(target: RepoTarget, scope: LogScope) {
   const fetchRevision = useRpc(revisionRpc);
   const fetchLog = useRpc(logRpc);
   const fetchStatus = useRpc(statusRpc);
@@ -38,8 +39,8 @@ export function useRepoGraph(target: RepoTarget) {
   const tokens = revision.data;
 
   const log = useQuery({
-    queryKey: ["git-graph", "log", key, limit, tokens?.refsToken],
-    queryFn: () => fetchLog({ target, limit }),
+    queryKey: ["git-graph", "log", key, scope, limit, tokens?.refsToken],
+    queryFn: () => fetchLog({ target, limit, scope }),
     enabled: tokens !== undefined,
     placeholderData: keepPreviousData,
   });

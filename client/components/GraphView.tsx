@@ -44,7 +44,7 @@ function keyExtractor(item: ListItem): string {
 
 export function GraphView({ target, theme, compact }: GraphViewProps) {
   const { colors } = theme;
-  const repo = useRepoGraph(target);
+  const repo = useRepoGraph(target, "all");
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   // The panel can sit in the narrow Explorer of a wide window, so size from our own width.
   const [width, setWidth] = useState<number | null>(null);

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { DIFF_MAX_BYTES } from "../shared/constants";
-import type { CommitDetail, CommitSummary, Identity, RepoStatus } from "../shared/contracts";
+import type { CommitDetail, CommitSummary, Identity, LogScope, RepoStatus } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
 import { COMMIT_FORMAT, LOG_FORMAT, parseCommitDetail, parseLog, parseStatus } from "./parse";
 
@@ -36,15 +36,20 @@ export async function getStatus(root: string): Promise<RepoStatus> {
   return { ...parseStatus(stdout, root), identity };
 }
 
+// Stash refs point at internal index and untracked commits that are noise in a history graph.
+const ALL_BRANCHES: readonly string[] = ["--exclude=refs/stash", "--all"];
+
 export async function getLog(
   root: string,
   limit: number,
+  scope: LogScope,
 ): Promise<{ commits: CommitSummary[]; hasMore: boolean }> {
-  // Stash refs point at internal index and untracked commits that are noise in a history graph.
+  if (scope === "head" && !(await runGitOptional(root, ["rev-parse", "-q", "--verify", "HEAD"])).trim()) {
+    return { commits: [], hasMore: false };
+  }
   const stdout = await runGit(root, [
     "log",
-    "--exclude=refs/stash",
-    "--all",
+    ...(scope === "all" ? ALL_BRANCHES : ["HEAD"]),
     "--topo-order",
     "--decorate=full",
     `--max-count=${limit + 1}`,

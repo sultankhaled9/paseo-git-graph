@@ -22,7 +22,16 @@ import { isMine } from "../../shared/author";
 import { matchesQuery } from "../../shared/search";
 import { useNow } from "../hooks/useNow";
 import { useRepoGraph } from "../hooks/useRepoQueries";
-import { FONT_SIZE, ICON_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
+import {
+  FONT_SIZE,
+  ICON_SIZE,
+  MAX_GRAPH_LANES,
+  MIN_GRAPH_LANES,
+  NARROW_LAYOUT_WIDTH,
+  RADIUS,
+  SPACING,
+  wideLayoutMinWidth,
+} from "../tokens";
 import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
 import { Legend } from "./Legend";
@@ -100,7 +109,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
       return [{ commit, row, mine: isMine({ name: commit.authorName, email: commit.authorEmail }, identity) }];
     });
   }, [repo.commits, graph, showWip, identityName, identityEmail]);
-  const laneCount = Math.max(graph.laneCount, 1);
+  const laneCount = Math.min(Math.max(graph.laneCount, MIN_GRAPH_LANES), MAX_GRAPH_LANES);
 
   const searching = query.trim().length > 0;
   const matchIndices = useMemo(
@@ -152,8 +161,10 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     pendingJump.current = false;
     scrollToMatch(0);
   }, [scrollToMatch, waitingForLog]);
-  // The detail pane takes width from the list, so rows drop their author and date columns.
-  const condensed = narrow || activeSelection !== null;
+  // Rows drop their author and date columns when the detail pane takes width from the list,
+  // or when every column would not fit beside a readable description.
+  const tooTightForColumns = width !== null && width < wideLayoutMinWidth(laneCount);
+  const condensed = narrow || activeSelection !== null || tooTightForColumns;
 
   const renderItem = useCallback<ListRenderItem<ListItem>>(
     ({ item }) => (

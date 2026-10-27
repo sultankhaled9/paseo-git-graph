@@ -29,9 +29,10 @@ export const LaneCell = memo(function LaneCell({
   hollowFill,
 }: LaneCellProps) {
   const nodeColor = laneColor(color);
-  const nodeX = centerX(column);
+  // Lanes beyond the visible width are clipped; such a node is pinned to the last visible lane.
+  const nodeX = centerX(Math.min(column, laneCount - 1));
   return (
-    <View style={{ width: laneCount * LANE_WIDTH, height: ROW_HEIGHT }}>
+    <View style={{ width: laneCount * LANE_WIDTH, height: ROW_HEIGHT, overflow: "hidden" }}>
       {edges.map((edge) => {
         const x = centerX(edge.column);
         const stroke = laneColor(edge.color);

@@ -1,4 +1,4 @@
-import { LANE_PALETTE } from "../shared/constants";
+import { LANE_PALETTE, LANE_WIDTH } from "../shared/constants";
 import { stableHash } from "../shared/format";
 
 export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
@@ -9,6 +9,14 @@ export const AUTHOR_COLUMN_WIDTH = 140;
 export const DATE_COLUMN_WIDTH = 120;
 export const HASH_COLUMN_WIDTH = 64;
 export const REFS_COLUMN_WIDTH = 200;
+/** The graph column never shrinks below this many lanes, so its header label stays readable. */
+export const MIN_GRAPH_LANES = 3;
+/** Wider histories are clipped to this many lanes so the commit description keeps its room. */
+export const MAX_GRAPH_LANES = 10;
+export const MIN_SUBJECT_WIDTH = 200;
+const WIDE_ROW_GAPS = 5;
+const WIDE_ROW_PADDING_SIDES = 2;
+
 export const AUTHOR_BADGE_SIZE = 20;
 export const CHIP_ICON_SIZE = 11;
 /** The left-edge marker on the user's own commits. */
@@ -27,4 +35,17 @@ export function laneColor(color: number): string {
 
 export function authorColor(name: string): string {
   return LANE_PALETTE[stableHash(name) % LANE_PALETTE.length];
+}
+
+/** The width a row needs to show every column with a readable description. */
+export function wideLayoutMinWidth(lanes: number): number {
+  return (
+    lanes * LANE_WIDTH +
+    REFS_COLUMN_WIDTH +
+    MIN_SUBJECT_WIDTH +
+    AUTHOR_COLUMN_WIDTH +
+    DATE_COLUMN_WIDTH +
+    HASH_COLUMN_WIDTH +
+    SPACING.sm * (WIDE_ROW_GAPS + WIDE_ROW_PADDING_SIDES)
+  );
 }

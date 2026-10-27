@@ -1,4 +1,4 @@
-import { STATUS_MAX_FILES } from "../shared/constants";
+import { STATUS_MAX_FILES, STATUS_UNCHANGED as UNCHANGED } from "../shared/constants";
 import type {
   ChangeType,
   CommitDetail,
@@ -96,8 +96,6 @@ const BRANCH_UPSTREAM = "# branch.upstream ";
 const BRANCH_AB = "# branch.ab ";
 const INITIAL_OID = "(initial)";
 const DETACHED_HEAD = "(detached)";
-/** The porcelain v2 XY marker for "no change on this side". */
-export const UNCHANGED = ".";
 
 const ORDINARY_FIELDS = 8;
 const RENAMED_FIELDS = 9;

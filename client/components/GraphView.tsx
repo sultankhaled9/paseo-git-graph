@@ -14,6 +14,7 @@ import type { CommitSummary, RepoTarget } from "../../shared/contracts";
 import {
   type GraphRow as GraphRowLayout,
   layoutGraph,
+  WIP_NODE_ID,
   withWorkInProgress,
 } from "../../shared/graph-layout";
 import { isMine } from "../../shared/author";
@@ -24,6 +25,7 @@ import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
+import { WipDetail } from "./WipDetail";
 import { hasWorkInProgress, WipRow } from "./WipRow";
 
 const LIST_FLEX = 3;
@@ -70,6 +72,10 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     [repo.commits, showWip, wipParent],
   );
   const wipRow = showWip ? graph.rows[0] : undefined;
+  // The WIP row shares the selection with commits; its id cannot collide with a hex hash.
+  const wipSelected = selectedHash === WIP_NODE_ID;
+  const activeSelection = wipSelected && !showWip ? null : selectedHash;
+  const selectWip = useCallback(() => setSelectedHash(WIP_NODE_ID), []);
   const identityName = status?.identity.name ?? null;
   const identityEmail = status?.identity.email ?? null;
   const items = useMemo<ListItem[]>(() => {
@@ -83,7 +89,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   }, [repo.commits, graph, showWip, identityName, identityEmail]);
   const laneCount = Math.max(graph.laneCount, 1);
   // The detail pane takes width from the list, so rows drop their author and date columns.
-  const condensed = narrow || selectedHash !== null;
+  const condensed = narrow || activeSelection !== null;
 
   const renderItem = useCallback<ListRenderItem<ListItem>>(
     ({ item }) => (
@@ -112,7 +118,17 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     [headerHeight],
   );
   const header =
-    status && wipRow ? <WipRow status={status} row={wipRow} laneCount={laneCount} theme={theme} /> : null;
+    status && wipRow ? (
+      <WipRow
+        status={status}
+        row={wipRow}
+        laneCount={laneCount}
+        theme={theme}
+        selected={activeSelection === WIP_NODE_ID}
+        compact={condensed}
+        onPress={selectWip}
+      />
+    ) : null;
 
   const textStyle = { color: colors.foregroundMuted, fontSize: FONT_SIZE.body };
   const buttonStyle = {
@@ -172,17 +188,29 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     );
   }
 
-  const detail =
-    selectedHash === null ? null : (
-      <CommitDetail
-        key={selectedHash}
+  let detail = null;
+  if (activeSelection === WIP_NODE_ID && status) {
+    detail = (
+      <WipDetail
         target={target}
-        hash={selectedHash}
+        status={status}
+        worktreeToken={repo.worktreeToken}
+        theme={theme}
+        onClose={narrow ? undefined : closeDetail}
+      />
+    );
+  } else if (activeSelection !== null) {
+    detail = (
+      <CommitDetail
+        key={activeSelection}
+        target={target}
+        hash={activeSelection}
         theme={theme}
         onSelectCommit={setSelectedHash}
         onClose={narrow ? undefined : closeDetail}
       />
     );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
@@ -190,7 +218,11 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
       {narrow ? (
         <>
           {body}
-          <Modal title="Commit" open={detail !== null} onOpenChange={onModalOpenChange}>
+          <Modal
+            title={activeSelection === WIP_NODE_ID ? "Uncommitted changes" : "Commit"}
+            open={detail !== null}
+            onOpenChange={onModalOpenChange}
+          >
             <Modal.Content scrollable={false} contentContainerStyle={{ padding: 0, gap: 0 }}>
               {detail}
             </Modal.Content>

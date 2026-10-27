@@ -1,15 +1,13 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { copyText, FlatList, Icon, useToast } from "@getpaseo/plugin/client/react-native";
-import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, type ListRenderItem, Pressable, Text, View } from "react-native";
+import { copyText, Icon, useToast } from "@getpaseo/plugin/client/react-native";
+import { useCallback, useState } from "react";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { CommitDetail as CommitDetailData, FileChange, RepoTarget } from "../../shared/contracts";
 import { formatDate, shortHash } from "../../shared/format";
 import { useCommitDetail, useFileDiff } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, MONO_FONT, RADIUS, SPACING } from "../tokens";
-import { DiffLine } from "./DiffView";
+import { DiffPane } from "./DiffView";
 
-const DIVIDER_WIDTH = 1;
-const NO_LINES: readonly string[] = [];
 
 interface CommitDetailProps {
   target: RepoTarget;
@@ -21,10 +19,6 @@ interface CommitDetailProps {
 
 function fileLabel(file: FileChange): string {
   return file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path;
-}
-
-function lineKey(_: string, index: number): string {
-  return String(index);
 }
 
 function sameFile(a: FileChange | null, b: FileChange): boolean {
@@ -150,15 +144,13 @@ function Header({
   );
 }
 
-/** Commit metadata, changed files, and the selected file's diff in one virtualized list. */
+/** Commit metadata, changed files, and the selected file's diff. */
 export function CommitDetail({ target, hash, theme, onSelectCommit, onClose }: CommitDetailProps) {
   const { colors } = theme;
   const toast = useToast();
   const detail = useCommitDetail(target, hash);
   const [selectedFile, setSelectedFile] = useState<FileChange | null>(null);
   const diff = useFileDiff(target, hash, selectedFile);
-  const diffText = diff.data?.text;
-  const lines = useMemo(() => (diffText === undefined ? NO_LINES : diffText.split("\n")), [diffText]);
 
   const onCopy = useCallback(() => {
     copyText(hash).then(
@@ -166,10 +158,6 @@ export function CommitDetail({ target, hash, theme, onSelectCommit, onClose }: C
       () => toast.error("Could not copy the commit hash"),
     );
   }, [hash, toast]);
-  const renderLine = useCallback<ListRenderItem<string>>(
-    ({ item }) => <DiffLine line={item} theme={theme} />,
-    [theme],
-  );
 
   if (detail.error) {
     return <Text style={{ padding: SPACING.md, color: colors.statusDanger }}>{detail.error.message}</Text>;
@@ -178,38 +166,24 @@ export function CommitDetail({ target, hash, theme, onSelectCommit, onClose }: C
     return <ActivityIndicator style={{ marginTop: SPACING.xl }} color={colors.foregroundMuted} />;
   }
 
-  let footer = null;
-  if (diff.error) {
-    footer = <Text style={{ padding: SPACING.md, color: colors.statusDanger }}>{diff.error.message}</Text>;
-  } else if (diff.isFetching) {
-    footer = <ActivityIndicator style={{ marginVertical: SPACING.md }} color={colors.foregroundMuted} />;
-  } else if (diff.data?.truncated) {
-    footer = (
-      <Text style={{ padding: SPACING.md, color: colors.statusWarning, fontSize: FONT_SIZE.small }}>
-        Diff truncated. Open the file in an editor to see the rest.
-      </Text>
-    );
-  }
-
   return (
-    <FlatList
-      data={lines}
-      renderItem={renderLine}
-      keyExtractor={lineKey}
-      ListHeaderComponent={
-        <View style={{ borderBottomWidth: lines.length > 0 ? DIVIDER_WIDTH : 0, borderBottomColor: colors.border }}>
-          <Header
-            detail={detail.data}
-            theme={theme}
-            selectedFile={selectedFile}
-            onSelectFile={setSelectedFile}
-            onSelectCommit={onSelectCommit}
-            onClose={onClose}
-            onCopy={onCopy}
-          />
-        </View>
+    <DiffPane
+      header={
+        <Header
+          detail={detail.data}
+          theme={theme}
+          selectedFile={selectedFile}
+          onSelectFile={setSelectedFile}
+          onSelectCommit={onSelectCommit}
+          onClose={onClose}
+          onCopy={onCopy}
+        />
       }
-      ListFooterComponent={footer}
+      text={diff.data?.text}
+      truncated={diff.data?.truncated ?? false}
+      loading={diff.isFetching}
+      error={diff.error}
+      theme={theme}
     />
   );
 }

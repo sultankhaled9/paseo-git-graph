@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { DIFF_MAX_BYTES } from "../shared/constants";
+import { fileInArea } from "../shared/status-text";
 import type {
   CommitDetail,
   CommitSummary,
   Identity,
   LogScope,
   RepoStatus,
-  StatusFile,
   WipArea,
 } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
@@ -18,7 +18,6 @@ import {
   parseIdentity,
   parseLog,
   parseStatus,
-  UNCHANGED,
 } from "./parse";
 
 const STATUS_ARGS: readonly string[] = [
@@ -131,19 +130,6 @@ const DIFF_SAFETY_FLAGS: readonly string[] = ["--no-color", "--no-ext-diff", "--
 const NULL_DEVICE = "/dev/null";
 const NO_INDEX_EXIT_CODES: readonly number[] = [0, 1];
 
-function inArea(file: StatusFile, area: WipArea): boolean {
-  switch (area) {
-    case "staged":
-      return (file.kind === "changed" || file.kind === "renamed") && file.index !== UNCHANGED;
-    case "unstaged":
-      return (file.kind === "changed" || file.kind === "renamed") && file.worktree !== UNCHANGED;
-    case "untracked":
-      return file.kind === "untracked";
-    case "conflicted":
-      return file.kind === "unmerged";
-  }
-}
-
 /**
  * Diffs one uncommitted file. The path must appear in a fresh, unfiltered `git status` for that
  * exact area before anything runs, because `diff --no-index` would otherwise read any file on
@@ -152,7 +138,7 @@ function inArea(file: StatusFile, area: WipArea): boolean {
 export async function getWipDiff(root: string, path: string, area: WipArea): Promise<CappedOutput> {
   const status = parseStatus(await runGit(root, STATUS_ARGS), root, Number.POSITIVE_INFINITY);
   const file = status.files.find((candidate) => candidate.path === path);
-  if (!file || !inArea(file, area)) throw new Error(`${path} has no ${area} changes now`);
+  if (!file || !fileInArea(file, area)) throw new Error(`${path} has no ${area} changes now`);
 
   switch (area) {
     case "staged":

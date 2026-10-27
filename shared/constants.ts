@@ -33,3 +33,6 @@ export const LANE_PALETTE: readonly string[] = [
 ];
 
 export const HASH_PATTERN = /^[0-9a-f]{7,64}$/;
+
+/** The porcelain v2 XY marker for "no change on this side". */
+export const STATUS_UNCHANGED = ".";

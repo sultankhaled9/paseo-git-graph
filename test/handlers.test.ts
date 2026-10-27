@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createRepoHandlers, type WorkspaceLookup } from "../server/handlers";
 
@@ -55,6 +55,12 @@ describe("repo handlers", () => {
     execFileSync("git", ["config", "user.email", "ada@example.com"], { cwd: repo, env: GIT_ENV });
     const identity = await handlers.identity({ target: { kind: "project", projectId: "p" } }, lookup({}));
     expect(identity.email).toBe("ada@example.com");
+  });
+
+  it("list repositories inside a workspace folder through the Paseo lookup", async () => {
+    const paseo = lookup({ w: { workspaceDirectory: dirname(repo), projectKind: "directory" } });
+    const { repos } = await handlers.workspaceRepos({ workspaceId: "w" }, paseo);
+    expect(repos.map((entry) => entry.relativePath)).toContain(basename(repo));
   });
 
   it("reject workspaces without a directory", async () => {

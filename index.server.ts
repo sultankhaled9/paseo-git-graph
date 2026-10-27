@@ -12,6 +12,7 @@ import {
   revisionRpc,
   statusRpc,
   wipDiffRpc,
+  workspaceReposRpc,
 } from "./shared/contracts";
 
 export default function contribute(server: PluginServerContext) {
@@ -24,6 +25,7 @@ export default function contribute(server: PluginServerContext) {
 
   server.handle(inspectPathRpc, ({ path }) => inspectPath(path));
   server.handle(folderReposRpc, (input) => repo.folderRepos(input));
+  server.handle(workspaceReposRpc, (input, { paseo }) => repo.workspaceRepos(input, paseo));
   server.handle(statusRpc, (input, { paseo }) => repo.status(input, paseo));
   server.handle(identityRpc, (input, { paseo }) => repo.identity(input, paseo));
   server.handle(logRpc, (input, { paseo }) => repo.log(input, paseo));

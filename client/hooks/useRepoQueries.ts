@@ -27,6 +27,8 @@ export function targetKey(target: RepoTarget): string {
       return `workspace:${target.workspaceId}`;
     case "folder-repo":
       return `folder:${target.folderId}:${target.relativePath}`;
+    case "workspace-repo":
+      return `workspace-repo:${target.workspaceId}:${target.relativePath}`;
   }
 }
 

@@ -4,7 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ProjectsDocument, RepoTarget } from "../shared/contracts";
-import { inspectPath, listFolderRepos, type RepoGuardDeps, resolveRepo } from "../server/repo-guard";
+import {
+  inspectPath,
+  listFolderRepos,
+  listWorkspaceRepos,
+  type RepoGuardDeps,
+  resolveRepo,
+  type WorkspaceInfo,
+} from "../server/repo-guard";
 
 const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
 
@@ -34,7 +41,7 @@ beforeAll(async () => {
   gitInit(join(folder, "client-x", "web"));
   gitInit(join(folder, "client-x", "deep", "too-deep"));
   gitInit(outsideRepo);
-  await mkdir(join(folder, "api", "src"));
+  await mkdir(join(folder, "api", "src", "inner"), { recursive: true });
   await mkdir(join(folder, "plain"));
   await mkdir(join(base, "empty"));
   await symlink(outsideRepo, join(folder, "escape"));
@@ -115,5 +122,54 @@ describe("inspectPath", () => {
       kind: "invalid",
       reason: "No git repositories found here (looked two folders deep)",
     });
+  });
+});
+
+describe("workspace repositories", () => {
+  // Built on each call: `folder` is only known after beforeAll has created the fixture.
+  function workspaces(): Record<string, WorkspaceInfo> {
+    return {
+      dir: { directory: folder, projectKind: "directory" },
+      nongit: { directory: folder, projectKind: "non_git" },
+      nofolder: { directory: null, projectKind: "directory" },
+      insideRepo: { directory: join(folder, "api", "src"), projectKind: "directory" },
+    };
+  }
+  const plain: RepoGuardDeps = {
+    readSettings: async () => settings,
+    getWorkspace: async (id) => workspaces()[id] ?? null,
+  };
+  const repoIn = (workspaceId: string, relativePath: string): RepoTarget => ({
+    kind: "workspace-repo",
+    workspaceId,
+    relativePath,
+  });
+
+  it("lists the repositories inside a plain-folder workspace", async () => {
+    const { repos } = await listWorkspaceRepos("dir", plain);
+    expect(repos.map((repo) => repo.relativePath)).toEqual(["api", "client-x/web"]);
+  });
+
+  it("resolves them for both directory and non_git workspaces", async () => {
+    expect(await resolveRepo(repoIn("dir", "client-x/web"), plain)).toBe(join(folder, "client-x", "web"));
+    expect(await resolveRepo(repoIn("nongit", "api"), plain)).toBe(join(folder, "api"));
+  });
+
+  it("rejects traversal, symlink escapes, depth, and non-root folders", async () => {
+    await expect(resolveRepo(repoIn("dir", "../outside"), plain)).rejects.toThrow("Not a repository path");
+    await expect(resolveRepo(repoIn("dir", "escape"), plain)).rejects.toThrow("no longer a repository in this workspace");
+    await expect(resolveRepo(repoIn("dir", "client-x/deep/too-deep"), plain)).rejects.toThrow("Not a repository path");
+    await expect(resolveRepo(repoIn("dir", "plain"), plain)).rejects.toThrow("not a repository root");
+    await expect(resolveRepo(repoIn("dir", "deleted"), plain)).rejects.toThrow("no longer a repository");
+  });
+
+  it("rejects an ordinary subfolder of an enclosing repository", async () => {
+    await expect(resolveRepo(repoIn("insideRepo", "inner"), plain)).rejects.toThrow("not a repository root");
+  });
+
+  it("rejects unknown workspaces and workspaces without a folder", async () => {
+    await expect(resolveRepo(repoIn("missing", "api"), plain)).rejects.toThrow("has no folder");
+    await expect(resolveRepo(repoIn("nofolder", "api"), plain)).rejects.toThrow("has no folder");
+    await expect(listWorkspaceRepos("missing", plain)).rejects.toThrow("has no folder");
   });
 });

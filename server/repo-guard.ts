@@ -48,20 +48,20 @@ export async function resolveFolder(folderId: string, readSettings: ReadSettings
 }
 
 /**
- * A repository inside a saved folder. Every path component must be a real directory (no
- * symlinks), so the result cannot leave the folder, and it must be exactly git's toplevel.
+ * A repository at `relativePath` under a canonical base directory. Every path component must be
+ * a real directory (no symlinks), so the result cannot leave the base, and it must be exactly
+ * git's toplevel, which also rejects ordinary subfolders of an enclosing repository.
  */
-async function resolveFolderRepo(folderId: string, relativePath: string, readSettings: ReadSettings): Promise<string> {
+async function resolveRepoInside(base: string, relativePath: string, where: string): Promise<string> {
   if (!folderRelativePathSchema.safeParse(relativePath).success) {
     throw new Error("Not a repository path inside the folder");
   }
-  const folder = await resolveFolder(folderId, readSettings);
-  let current = folder.path;
+  let current = base;
   for (const segment of relativePath.split("/")) {
     current = join(current, segment);
     const info = await lstat(current).catch(() => null);
     if (!info || info.isSymbolicLink() || !info.isDirectory()) {
-      throw new Error(`${relativePath} is no longer a repository in "${folder.name}"`);
+      throw new Error(`${relativePath} is no longer a repository in ${where}`);
     }
   }
   const root = await toplevelOf(current).catch(() => null);
@@ -69,10 +69,23 @@ async function resolveFolderRepo(folderId: string, relativePath: string, readSet
   return root;
 }
 
+/** The canonical folder of any workspace with a directory, git or not. */
+async function resolveWorkspaceFolder(workspaceId: string, deps: RepoGuardDeps): Promise<string> {
+  const workspace = await deps.getWorkspace(workspaceId);
+  if (!workspace?.directory) throw new Error("This workspace has no folder");
+  const directory = await canonical(workspace.directory);
+  if (!directory) throw new Error("Workspace folder is not available");
+  return directory;
+}
+
 /** Resolves a target to a canonical repository root that the user registered or is working in. */
 export async function resolveRepo(target: RepoTarget, deps: RepoGuardDeps): Promise<string> {
   if (target.kind === "folder-repo") {
-    return resolveFolderRepo(target.folderId, target.relativePath, deps.readSettings);
+    const folder = await resolveFolder(target.folderId, deps.readSettings);
+    return resolveRepoInside(folder.path, target.relativePath, `"${folder.name}"`);
+  }
+  if (target.kind === "workspace-repo") {
+    return resolveRepoInside(await resolveWorkspaceFolder(target.workspaceId, deps), target.relativePath, "this workspace");
   }
   if (target.kind === "project") {
     const { projects } = await deps.readSettings();
@@ -110,6 +123,10 @@ export async function validateRepoPath(path: string): Promise<ValidatePathOutput
       reason: error instanceof GitError ? error.message : "Not a git repository",
     };
   }
+}
+
+export async function listWorkspaceRepos(workspaceId: string, deps: RepoGuardDeps): Promise<FolderScanResult> {
+  return scanFolder(await resolveWorkspaceFolder(workspaceId, deps));
 }
 
 export async function listFolderRepos(folderId: string, readSettings: ReadSettings): Promise<FolderScanResult> {

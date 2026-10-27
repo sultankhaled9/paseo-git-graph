@@ -4,13 +4,20 @@ import type {
   diffRpc,
   folderReposRpc,
   identityRpc,
+  workspaceReposRpc,
   logRpc,
   RepoTarget,
   revisionRpc,
   statusRpc,
   wipDiffRpc,
 } from "../shared/contracts";
-import { listFolderRepos, type ReadSettings, type RepoGuardDeps, resolveRepo } from "./repo-guard";
+import {
+  listFolderRepos,
+  listWorkspaceRepos,
+  type ReadSettings,
+  type RepoGuardDeps,
+  resolveRepo,
+} from "./repo-guard";
 import { getCommit, getDiff, getIdentity, getLog, getRevision, getStatus, getWipDiff } from "./repo";
 
 /** The slice of the Paseo SDK the guard needs; PaseoApi satisfies it structurally. */
@@ -23,21 +30,26 @@ export interface WorkspaceLookup {
 }
 
 export function createRepoHandlers(readSettings: ReadSettings) {
-  const resolve = (target: RepoTarget, paseo: WorkspaceLookup): Promise<string> => {
-    const deps: RepoGuardDeps = {
-      readSettings,
-      async getWorkspace(workspaceId) {
-        const workspace = await paseo.workspaces.ref(workspaceId).refresh();
-        if (!workspace) return null;
-        return { directory: workspace.workspaceDirectory ?? null, projectKind: workspace.projectKind };
-      },
-    };
-    return resolveRepo(target, deps);
-  };
+  const guardDeps = (paseo: WorkspaceLookup): RepoGuardDeps => ({
+    readSettings,
+    async getWorkspace(workspaceId) {
+      const workspace = await paseo.workspaces.ref(workspaceId).refresh();
+      if (!workspace) return null;
+      return { directory: workspace.workspaceDirectory ?? null, projectKind: workspace.projectKind };
+    },
+  });
+  const resolve = (target: RepoTarget, paseo: WorkspaceLookup): Promise<string> =>
+    resolveRepo(target, guardDeps(paseo));
 
   return {
     folderRepos({ folderId }: RpcInput<typeof folderReposRpc>): Promise<RpcOutput<typeof folderReposRpc>> {
       return listFolderRepos(folderId, readSettings);
+    },
+    workspaceRepos(
+      { workspaceId }: RpcInput<typeof workspaceReposRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof workspaceReposRpc>> {
+      return listWorkspaceRepos(workspaceId, guardDeps(paseo));
     },
     async identity(
       { target }: RpcInput<typeof identityRpc>,

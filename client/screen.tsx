@@ -35,6 +35,7 @@ function stillAvailable(
       return scan && isStillListed(selection.relativePath, scan) ? selection : null;
     }
     case "workspace":
+    case "workspace-repo":
       return null;
   }
 }

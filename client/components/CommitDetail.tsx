@@ -2,20 +2,38 @@ import type { PluginTheme } from "@getpaseo/plugin";
 import { copyText, Icon, useToast } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
-import type { CommitDetail as CommitDetailData, FileChange, RepoTarget } from "../../shared/contracts";
+import { isMine } from "../../shared/author";
+import type {
+  ChangeType,
+  CommitDetail as CommitDetailData,
+  FileChange,
+  Identity,
+  RepoTarget,
+} from "../../shared/contracts";
 import { formatDate, shortHash } from "../../shared/format";
 import { useCommitDetail, useFileDiff } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, MONO_FONT, RADIUS, SPACING } from "../tokens";
 import { DiffPane } from "./DiffView";
 
-
 interface CommitDetailProps {
   target: RepoTarget;
   hash: string;
   theme: PluginTheme;
+  identity: Identity | undefined;
   onSelectCommit(hash: string): void;
   onClose?: () => void;
 }
+
+type ThemeColor = keyof PluginTheme["colors"];
+
+const CHANGE_STYLES: Readonly<Record<ChangeType, { icon: string; label: string; color: ThemeColor }>> = {
+  added: { icon: "FilePlus", label: "added", color: "statusSuccess" },
+  modified: { icon: "FilePen", label: "modified", color: "foreground" },
+  deleted: { icon: "FileMinus", label: "deleted", color: "statusWarning" },
+  renamed: { icon: "ArrowRightLeft", label: "renamed", color: "accent" },
+  copied: { icon: "CopyPlus", label: "copied", color: "accent" },
+  "type-changed": { icon: "FileType", label: "type changed", color: "foregroundMuted" },
+};
 
 function fileLabel(file: FileChange): string {
   return file.oldPath ? `${file.oldPath} -> ${file.path}` : file.path;
@@ -27,6 +45,7 @@ function sameFile(a: FileChange | null, b: FileChange): boolean {
 
 function Header({
   detail,
+  mine,
   theme,
   selectedFile,
   onSelectFile,
@@ -35,6 +54,7 @@ function Header({
   onCopy,
 }: {
   detail: CommitDetailData;
+  mine: boolean;
   theme: PluginTheme;
   selectedFile: FileChange | null;
   onSelectFile(file: FileChange): void;
@@ -74,7 +94,12 @@ function Header({
 
       <View style={{ gap: SPACING.xs }}>
         <Text style={muted}>
-          Author: {detail.authorName} &lt;{detail.authorEmail}&gt;, {formatDate(detail.authorDate)}
+          Author:{" "}
+          <Text style={mine ? { color: colors.statusDanger, fontWeight: "600" } : undefined}>
+            {detail.authorName}
+            {mine ? " (you)" : ""}
+          </Text>{" "}
+          &lt;{detail.authorEmail}&gt;, {formatDate(detail.authorDate)}
         </Text>
         {committedSeparately ? (
           <Text style={muted}>
@@ -109,15 +134,17 @@ function Header({
         </Text>
         {detail.files.map((file) => {
           const selected = sameFile(selectedFile, file);
+          const change = CHANGE_STYLES[file.change];
           return (
             <Pressable
               key={fileLabel(file)}
               accessibilityRole="button"
-              accessibilityLabel={`Show diff for ${fileLabel(file)}`}
+              accessibilityLabel={`Show diff for ${fileLabel(file)}, ${change.label}`}
               accessibilityState={{ selected }}
               onPress={() => onSelectFile(file)}
               style={{
                 flexDirection: "row",
+                alignItems: "center",
                 gap: SPACING.sm,
                 paddingHorizontal: SPACING.sm,
                 paddingVertical: SPACING.xs,
@@ -125,9 +152,11 @@ function Header({
                 backgroundColor: selected ? colors.surface2 : colors.surface1,
               }}
             >
+              <Icon name={change.icon} size={ICON_SIZE} color={colors[change.color]} />
               <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: FONT_SIZE.small }}>
                 {fileLabel(file)}
               </Text>
+              <Text style={{ color: colors[change.color], fontSize: FONT_SIZE.small }}>{change.label}</Text>
               {file.additions === null || file.deletions === null ? (
                 <Text style={muted}>binary</Text>
               ) : (
@@ -145,7 +174,7 @@ function Header({
 }
 
 /** Commit metadata, changed files, and the selected file's diff. */
-export function CommitDetail({ target, hash, theme, onSelectCommit, onClose }: CommitDetailProps) {
+export function CommitDetail({ target, hash, theme, identity, onSelectCommit, onClose }: CommitDetailProps) {
   const { colors } = theme;
   const toast = useToast();
   const detail = useCommitDetail(target, hash);
@@ -171,6 +200,7 @@ export function CommitDetail({ target, hash, theme, onSelectCommit, onClose }: C
       header={
         <Header
           detail={detail.data}
+          mine={isMine({ name: detail.data.authorName, email: detail.data.authorEmail }, identity)}
           theme={theme}
           selectedFile={selectedFile}
           onSelectFile={setSelectedFile}

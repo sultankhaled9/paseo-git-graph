@@ -1,5 +1,5 @@
 import type { PluginTheme } from "@getpaseo/plugin";
-import { FlatList, Modal } from "@getpaseo/plugin/client/react-native";
+import { FlatList, Icon, Modal } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -22,9 +22,10 @@ import { isMine } from "../../shared/author";
 import { matchesQuery } from "../../shared/search";
 import { useNow } from "../hooks/useNow";
 import { useRepoGraph } from "../hooks/useRepoQueries";
-import { FONT_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
+import { FONT_SIZE, ICON_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
 import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
+import { Legend } from "./Legend";
 import { GraphRow } from "./GraphRow";
 import { StatusBar } from "./StatusBar";
 import { WipDetail } from "./WipDetail";
@@ -59,6 +60,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   const [scope, setScope] = useState<LogScope>("all");
   const repo = useRepoGraph(target, scope);
   const [query, setQuery] = useState("");
+  const [showLegend, setShowLegend] = useState(false);
+  const toggleLegend = useCallback(() => setShowLegend((shown) => !shown), []);
   const [matchPosition, setMatchPosition] = useState(0);
   const listRef = useRef<NativeFlatList<ListItem>>(null);
   const now = useNow();
@@ -267,6 +270,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         target={target}
         hash={activeSelection}
         theme={theme}
+        identity={status?.identity}
         onSelectCommit={setSelectedHash}
         onClose={narrow ? undefined : closeDetail}
       />
@@ -275,7 +279,24 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
-      {status ? <StatusBar status={status} theme={theme} /> : null}
+      {status ? (
+        <StatusBar
+          status={status}
+          theme={theme}
+          actions={
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={showLegend ? "Hide legend" : "What do the colors and shapes mean?"}
+              accessibilityState={{ expanded: showLegend }}
+              onPress={toggleLegend}
+              style={{ padding: SPACING.xs, borderRadius: RADIUS.chip, backgroundColor: showLegend ? colors.surface2 : "transparent" }}
+            >
+              <Icon name="Info" size={ICON_SIZE} color={colors.foregroundMuted} />
+            </Pressable>
+          }
+        />
+      ) : null}
+      {showLegend ? <Legend theme={theme} identity={status?.identity} /> : null}
       <SearchBar
         theme={theme}
         query={query}

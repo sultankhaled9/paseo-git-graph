@@ -1,14 +1,14 @@
 import type { PluginScreenProps } from "@getpaseo/plugin/client";
-import { ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
+import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { Project, RepoTarget } from "../shared/contracts";
 import { AddProjectForm } from "./components/AddProjectForm";
 import { GraphView } from "./components/GraphView";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
 import { targetKey } from "./hooks/useRepoQueries";
 import { useProjects } from "./hooks/useProjects";
-import { FONT_SIZE, SPACING } from "./tokens";
+import { FONT_SIZE, ICON_SIZE, RADIUS, SPACING } from "./tokens";
 
 const SIDEBAR_WIDTH = 280;
 const DIVIDER_WIDTH = 1;
@@ -19,6 +19,11 @@ export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
   const toast = useToast();
   const projects = useProjects();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const onAdded = useCallback((projectId: string) => {
+    setSelectedId(projectId);
+    setAdding(false);
+  }, []);
   const selected = projects.projects.find((project) => project.id === selectedId) ?? projects.projects[0];
   const selectedProjectId = selected?.id ?? null;
   const target = useMemo<RepoTarget | null>(
@@ -62,7 +67,32 @@ export function GitGraphScreen({ theme, layout }: PluginScreenProps) {
         onSelect={setSelectedId}
         onRemove={onRemove}
       />
-      <AddProjectForm theme={theme} onAdd={projects.add} onAdded={setSelectedId} />
+      {projects.projects.length > 0 ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={adding ? "Cancel adding a repository" : "Add repository"}
+          accessibilityState={{ expanded: adding }}
+          onPress={() => setAdding((open) => !open)}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            alignSelf: "flex-start",
+            gap: SPACING.xs,
+            paddingHorizontal: SPACING.sm,
+            paddingVertical: SPACING.xs,
+            borderRadius: RADIUS.chip,
+            backgroundColor: colors.surface2,
+          }}
+        >
+          <Icon name={adding ? "X" : "Plus"} size={ICON_SIZE} color={colors.foreground} />
+          <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.small }}>
+            {adding ? "Cancel" : "Add repository"}
+          </Text>
+        </Pressable>
+      ) : null}
+      {adding || projects.projects.length === 0 ? (
+        <AddProjectForm theme={theme} onAdd={projects.add} onAdded={onAdded} />
+      ) : null}
     </>
   );
   const graph = target ? (

@@ -9,10 +9,14 @@ export const AUTHOR_COLUMN_WIDTH = 140;
 export const DATE_COLUMN_WIDTH = 120;
 export const HASH_COLUMN_WIDTH = 64;
 export const REFS_COLUMN_WIDTH = 200;
+/** In condensed rows, labels share space with the message, so they get one chip and a tight cap. */
+export const COMPACT_REFS_MAX_WIDTH = 96;
 /** The graph column never shrinks below this many lanes, so its header label stays readable. */
 export const MIN_GRAPH_LANES = 3;
 /** Wider histories are clipped to this many lanes so the commit description keeps its room. */
 export const MAX_GRAPH_LANES = 10;
+/** Narrow views (Explorer, mobile) keep fewer lanes so the message stays readable. */
+export const MAX_GRAPH_LANES_NARROW = 4;
 export const MIN_SUBJECT_WIDTH = 200;
 const WIDE_ROW_GAPS = 5;
 const WIDE_ROW_PADDING_SIDES = 2;

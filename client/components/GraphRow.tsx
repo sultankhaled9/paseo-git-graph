@@ -11,6 +11,7 @@ import {
   AUTHOR_COLUMN_WIDTH,
   authorColor,
   CHIP_ICON_SIZE,
+  COMPACT_REFS_MAX_WIDTH,
   DATE_COLUMN_WIDTH,
   DIMMED_OPACITY,
   FONT_SIZE,
@@ -26,6 +27,7 @@ import {
 import { LaneCell } from "./LaneCell";
 
 const MAX_VISIBLE_REFS = 3;
+const MAX_VISIBLE_REFS_COMPACT = 1;
 const CHIP_BORDER_WIDTH = 1;
 const BADGE_FONT_SIZE = 9;
 
@@ -115,7 +117,7 @@ export const GraphRow = memo(function GraphRow({
 }: GraphRowProps) {
   const { colors } = theme;
   const lane = laneColor(row.color);
-  const visibleRefs = commit.refs.slice(0, MAX_VISIBLE_REFS);
+  const visibleRefs = commit.refs.slice(0, compact ? MAX_VISIBLE_REFS_COMPACT : MAX_VISIBLE_REFS);
   const hiddenRefs = commit.refs.length - visibleRefs.length;
   const authorTextColor = mine ? colors.statusDanger : colors.foregroundMuted;
   return (
@@ -156,7 +158,7 @@ export const GraphRow = memo(function GraphRow({
       <View
         style={[
           { flexDirection: "row", alignItems: "center", gap: SPACING.xs, overflow: "hidden" },
-          compact ? { flexShrink: 1, maxWidth: REFS_COLUMN_WIDTH } : { width: REFS_COLUMN_WIDTH },
+          compact ? { flexShrink: 1, maxWidth: COMPACT_REFS_MAX_WIDTH } : { width: REFS_COLUMN_WIDTH },
         ]}
       >
         {visibleRefs.map((gitRef) => (

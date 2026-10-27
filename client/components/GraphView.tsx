@@ -27,6 +27,7 @@ import {
   FONT_SIZE,
   ICON_SIZE,
   MAX_GRAPH_LANES,
+  MAX_GRAPH_LANES_NARROW,
   MIN_GRAPH_LANES,
   NARROW_LAYOUT_WIDTH,
   RADIUS,
@@ -94,7 +95,10 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     () => layoutGraph(showWip ? withWorkInProgress(repo.commits, wipParent) : repo.commits),
     [repo.commits, showWip, wipParent],
   );
-  const laneCount = Math.min(Math.max(graph.laneCount, MIN_GRAPH_LANES), MAX_GRAPH_LANES);
+  const laneCount = Math.min(
+    Math.max(graph.laneCount, MIN_GRAPH_LANES),
+    narrow ? MAX_GRAPH_LANES_NARROW : MAX_GRAPH_LANES,
+  );
   const firstRow = graph.rows[0];
   const wipRow = showWip && firstRow ? projectRow(firstRow, laneCount) : undefined;
   // The WIP row shares the selection with commits; its id cannot collide with a hex hash.

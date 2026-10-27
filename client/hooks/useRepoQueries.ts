@@ -114,8 +114,9 @@ const WIP_DIFF_PATH_KEY = 3;
 const WIP_DIFF_AREA_KEY = 4;
 
 /**
- * Keyed by the worktree token so an edited file's diff refreshes with the next poll. The
- * previous diff stays on screen only while the same file refetches, never for another file.
+ * Re-editing an already-changed file leaves `git status` (and so the worktree token) unchanged,
+ * so the selected file's diff also polls on its own. The previous diff stays on screen only
+ * while the same file refetches, never for another file.
  */
 export function useWipDiff(target: RepoTarget, selection: WipSelection | null, worktreeToken: string | undefined) {
   const fetchWipDiff = useRpc(wipDiffRpc);
@@ -123,6 +124,7 @@ export function useWipDiff(target: RepoTarget, selection: WipSelection | null, w
     queryKey: ["git-graph", "wip-diff", targetKey(target), selection?.path, selection?.area, worktreeToken],
     queryFn: () => fetchWipDiff({ target, path: selection?.path ?? "", area: selection?.area ?? "unstaged" }),
     enabled: selection !== null,
+    refetchInterval: selection !== null ? REVISION_POLL_MS : false,
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[WIP_DIFF_PATH_KEY] === selection?.path &&
       previousQuery?.queryKey[WIP_DIFF_AREA_KEY] === selection?.area

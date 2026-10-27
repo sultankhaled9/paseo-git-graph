@@ -149,10 +149,19 @@ export type CommitDetail = z.infer<typeof commitDetailSchema>;
 export const folderRepoSchema = z.object({ relativePath: folderRelativePathSchema, name: z.string() });
 export type FolderRepo = z.infer<typeof folderRepoSchema>;
 
+const repoListSchema = z.object({ repos: z.array(folderRepoSchema), truncated: z.boolean() });
+
 export const folderReposRpc = defineRpc({
   name: "folder.list-repos",
   input: z.object({ folderId: z.string().min(1) }),
-  output: z.object({ repos: z.array(folderRepoSchema), truncated: z.boolean() }),
+  output: repoListSchema,
+});
+
+/** Repositories inside a workspace whose directory is a plain folder rather than a repository. */
+export const workspaceReposRpc = defineRpc({
+  name: "workspace.list-repos",
+  input: z.object({ workspaceId: z.string().min(1) }),
+  output: repoListSchema,
 });
 
 const inspectPathOutputSchema = z.discriminatedUnion("kind", [

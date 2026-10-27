@@ -5,6 +5,7 @@ import {
   folderRelativePathSchema,
   folderReposRpc,
   inspectPathRpc,
+  workspaceReposRpc,
   diffRpc,
   logRpc,
   projectsSettings,
@@ -36,6 +37,8 @@ describe("contracts", () => {
     expect(folderReposRpc.input.safeParse({ folderId: "f1" }).success).toBe(true);
     expect(folderReposRpc.input.safeParse({ folderId: "" }).success).toBe(false);
     expect(inspectPathRpc.input.safeParse({ path: "" }).success).toBe(false);
+    expect(workspaceReposRpc.input.safeParse({ workspaceId: "w1" }).success).toBe(true);
+    expect(workspaceReposRpc.input.safeParse({ workspaceId: "" }).success).toBe(false);
   });
 
   it("rejects relative project paths", () => {

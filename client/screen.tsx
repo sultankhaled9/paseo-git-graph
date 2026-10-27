@@ -3,6 +3,7 @@ import { Icon, ScrollView, useToast } from "@getpaseo/plugin/client/react-native
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import type { Folder, Project, RepoTarget } from "../shared/contracts";
+import { isStillListed } from "../shared/repo-selection";
 import { AddProjectForm } from "./components/AddProjectForm";
 import { GraphView } from "./components/GraphView";
 import { ProjectSwitcher } from "./components/ProjectSwitcher";
@@ -31,10 +32,7 @@ function stillAvailable(
       return projects.some((project) => project.id === selection.projectId) ? selection : null;
     case "folder-repo": {
       const scan = folderScans.find((candidate) => candidate.folder.id === selection.folderId);
-      if (!scan) return null;
-      // A truncated scan is incomplete, so a missing repository may simply be past the limit.
-      if (!scan.scanned || scan.truncated) return selection;
-      return scan.repos.some((repo) => repo.relativePath === selection.relativePath) ? selection : null;
+      return scan && isStillListed(selection.relativePath, scan) ? selection : null;
     }
     case "workspace":
       return null;

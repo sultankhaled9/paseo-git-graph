@@ -78,6 +78,19 @@ describe("scanFolder", () => {
     await expect(scanFolder(root, { ...DEFAULT_SCAN_LIMITS, timeoutMs: -1 })).rejects.toBeInstanceOf(FolderScanError);
   });
 
+  it("enforces the deadline while checking candidate folders, not only before reading them", async () => {
+    const clockReadsBeforeCandidates = 2;
+    let reads = 0;
+    const now = () => {
+      reads += 1;
+      return reads <= clockReadsBeforeCandidates ? 0 : Number.MAX_SAFE_INTEGER;
+    };
+    await expect(scanFolder(root, { ...DEFAULT_SCAN_LIMITS, depth: 1, timeoutMs: 1, now })).rejects.toBeInstanceOf(
+      FolderScanError,
+    );
+    expect(reads).toBeGreaterThan(clockReadsBeforeCandidates);
+  });
+
   it("rejects a missing root", async () => {
     await expect(scanFolder(join(root, "missing"))).rejects.toThrow();
   });

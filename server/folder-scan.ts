@@ -20,6 +20,7 @@ export interface FolderScanLimits {
   maxEntries: number;
   timeoutMs: number;
   concurrency: number;
+  now: () => number;
 }
 
 export const DEFAULT_SCAN_LIMITS: FolderScanLimits = {
@@ -28,6 +29,7 @@ export const DEFAULT_SCAN_LIMITS: FolderScanLimits = {
   maxEntries: FOLDER_SCAN_MAX_ENTRIES,
   timeoutMs: FOLDER_SCAN_TIMEOUT_MS,
   concurrency: FOLDER_SCAN_CONCURRENCY,
+  now: Date.now,
 };
 
 export interface FolderScanResult {
@@ -86,7 +88,10 @@ function isCandidate(entry: Dirent): boolean {
  * rescans cheap; opening a repository still goes through the full git toplevel guard.
  */
 export async function scanFolder(root: string, limits: FolderScanLimits = DEFAULT_SCAN_LIMITS): Promise<FolderScanResult> {
-  const deadline = Date.now() + limits.timeoutMs;
+  const deadline = limits.now() + limits.timeoutMs;
+  const checkDeadline = () => {
+    if (limits.now() > deadline) throw new FolderScanError("Scanning the folder took too long");
+  };
   const repos: FolderRepo[] = [];
   let entriesSeen = 0;
   let truncated = false;
@@ -96,7 +101,7 @@ export async function scanFolder(root: string, limits: FolderScanLimits = DEFAUL
     const nextLevel: string[] = [];
     await mapLimit(level, limits.concurrency, async (relativeDir) => {
       if (truncated) return;
-      if (Date.now() > deadline) throw new FolderScanError("Scanning the folder took too long");
+      checkDeadline();
       let entries: Dirent[];
       try {
         entries = await readdir(join(root, relativeDir), { withFileTypes: true });
@@ -111,6 +116,7 @@ export async function scanFolder(root: string, limits: FolderScanLimits = DEFAUL
       }
       const candidates = entries.filter(isCandidate);
       await mapLimit(candidates, limits.concurrency, async (entry) => {
+        checkDeadline();
         const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
         if (await hasGitMarker(join(root, relativePath))) repos.push({ relativePath, name: entry.name });
         else if (depth < limits.depth) nextLevel.push(relativePath);

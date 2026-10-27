@@ -6,6 +6,7 @@ Select a commit to see its full message, author and committer, parent commits, a
 
 - **Git Graph screen**: opened from the sidebar or with "Open Git Graph" in the Command Center. You choose which repositories to track by entering their absolute paths, and switch between them in a list.
 - **Workspace panel**: "Show git graph for this workspace" in the Command Center opens a Git Graph tab for the repository of the current workspace. No setup is needed.
+- **Explorer**: in a workspace's Explorer, choose Git Graph from the add tab button. The graph then sits beside Files and Changes and always shows that workspace's repository. Add it once in each workspace where you want it.
 
 The view refreshes on its own every few seconds while it is open, so new commits, branch moves, and file edits show up without reloading.
 

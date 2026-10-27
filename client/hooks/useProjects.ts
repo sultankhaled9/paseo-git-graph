@@ -1,11 +1,18 @@
 import { useRpc, useSettings } from "@getpaseo/plugin/client";
 import { useCallback } from "react";
 import { MAX_PROJECTS, PROJECT_NAME_MAX_LENGTH } from "../../shared/constants";
-import { type Project, projectsSettings, validatePathRpc } from "../../shared/contracts";
+import {
+  type Folder,
+  type Project,
+  type ProjectsDocument,
+  projectsSettings,
+  validatePathRpc,
+} from "../../shared/contracts";
 
 const ID_RADIX = 36;
 const RANDOM_PREFIX_LENGTH = 2;
 const NO_PROJECTS: readonly Project[] = [];
+const NO_FOLDERS: readonly Folder[] = [];
 
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: string };
 
@@ -22,17 +29,19 @@ export function useProjects() {
   const validatePath = useRpc(validatePathRpc);
   const ready = settings.status === "ready";
   const projects = ready ? settings.values.projects : NO_PROJECTS;
+  const folders = ready ? settings.values.folders : NO_FOLDERS;
   const revision = ready ? settings.revision : null;
   const { save, reload } = settings;
 
+  // Every save writes the whole document, so changing one list must carry the other unchanged.
   const persist = useCallback(
-    async (next: Project[]): Promise<boolean> => {
+    async (changes: Partial<ProjectsDocument>): Promise<boolean> => {
       if (revision === null) return false;
-      const saved = await save({ projects: next }, revision);
+      const saved = await save({ projects: [...projects], folders: [...folders], ...changes }, revision);
       if (!saved) await reload();
       return saved;
     },
-    [revision, save, reload],
+    [revision, projects, folders, save, reload],
   );
 
   const add = useCallback(
@@ -51,7 +60,7 @@ export function useProjects() {
         name: (name.trim() || result.suggestedName).slice(0, PROJECT_NAME_MAX_LENGTH),
         path: result.path,
       };
-      return (await persist([...projects, project]))
+      return (await persist({ projects: [...projects, project] }))
         ? { ok: true, project }
         : { ok: false, reason: "Projects changed elsewhere. Try again." };
     },
@@ -59,12 +68,13 @@ export function useProjects() {
   );
 
   const remove = useCallback(
-    (id: string): Promise<boolean> => persist(projects.filter((project) => project.id !== id)),
+    (id: string): Promise<boolean> => persist({ projects: projects.filter((project) => project.id !== id) }),
     [projects, persist],
   );
 
   return {
     projects,
+    folders,
     status: settings.status,
     error: settings.status === "error" || settings.status === "invalid" ? settings.error : null,
     saving: settings.saving,

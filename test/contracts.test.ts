@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { LOG_MAX_LIMIT } from "../shared/constants";
 import {
   commitRpc,
+  folderRelativePathSchema,
+  folderReposRpc,
+  inspectPathRpc,
   diffRpc,
   logRpc,
   projectsSettings,
@@ -14,8 +17,26 @@ const target = { kind: "project", projectId: "p1" } as const;
 const hash = "0123456789abcdef0123456789abcdef01234567";
 
 describe("contracts", () => {
-  it("parses an unsaved settings document to an empty project list", () => {
-    expect(projectsSettings.schema.parse({})).toEqual({ projects: [] });
+  it("parses an unsaved settings document to empty lists", () => {
+    expect(projectsSettings.schema.parse({})).toEqual({ projects: [], folders: [] });
+  });
+
+  it("keeps projects saved before folders existed", () => {
+    const stored = { projects: [{ id: "a", name: "transcriber-api", path: "/mnt/c/repo" }] };
+    expect(projectsSettings.schema.parse(stored)).toEqual({ ...stored, folders: [] });
+  });
+
+  it("validates folder-relative repository paths", () => {
+    const valid = ["api", "client-x/api", "my repo"];
+    const invalid = ["", "/abs", "..", "a/../b", "./a", "a//b", "a/b/c", "a\\b", "a\0b"];
+    for (const path of valid) expect(folderRelativePathSchema.safeParse(path).success).toBe(true);
+    for (const path of invalid) expect(folderRelativePathSchema.safeParse(path).success).toBe(false);
+  });
+
+  it("requires a folder id to list repositories", () => {
+    expect(folderReposRpc.input.safeParse({ folderId: "f1" }).success).toBe(true);
+    expect(folderReposRpc.input.safeParse({ folderId: "" }).success).toBe(false);
+    expect(inspectPathRpc.input.safeParse({ path: "" }).success).toBe(false);
   });
 
   it("rejects relative project paths", () => {

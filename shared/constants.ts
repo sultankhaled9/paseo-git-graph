@@ -10,6 +10,15 @@ export const GIT_STDERR_MAX_CHARS = 64 * 1024;
 export const REVISION_POLL_MS = 3_000;
 
 export const MAX_PROJECTS = 100;
+export const MAX_FOLDERS = 50;
+
+/** Folder groups: how deep to look for repositories, and the bounds on one scan. */
+export const FOLDER_SCAN_DEPTH = 2;
+export const MAX_FOLDER_REPOS = 300;
+export const FOLDER_SCAN_MAX_ENTRIES = 20_000;
+export const FOLDER_SCAN_TIMEOUT_MS = 10_000;
+export const FOLDER_SCAN_CONCURRENCY = 8;
+export const FOLDER_RESCAN_MS = 30_000;
 export const PROJECT_NAME_MAX_LENGTH = 100;
 export const PROJECTS_SETTINGS_ID = "projects";
 

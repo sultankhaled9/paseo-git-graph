@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   HASH_PATTERN,
   LOG_MAX_LIMIT,
+  FOLDER_SCAN_DEPTH,
+  MAX_FOLDERS,
   MAX_PROJECTS,
   PROJECT_NAME_MAX_LENGTH,
   PROJECTS_SETTINGS_ID,
@@ -15,14 +17,38 @@ export const projectSchema = z.object({
 });
 export type Project = z.infer<typeof projectSchema>;
 
+/** A parent folder whose repositories are discovered by scanning and kept in sync. */
+export const folderSchema = projectSchema;
+export type Folder = z.infer<typeof folderSchema>;
+
+// Still version 1: the host parses stored values through this schema, so documents saved before
+// `folders` existed gain an empty list. A version bump would require a migrate function.
 export const projectsSettings = defineSettings({
   id: PROJECTS_SETTINGS_ID,
   scope: "host",
   version: 1,
   schema: z.object({
     projects: z.array(projectSchema).max(MAX_PROJECTS).default([]),
+    folders: z.array(folderSchema).max(MAX_FOLDERS).default([]),
   }),
 });
+export type ProjectsDocument = z.infer<typeof projectsSettings.schema>;
+
+/** A repository path relative to its folder: plain segments, no ".." or ".", at most the scan depth. */
+export const folderRelativePathSchema = z
+  .string()
+  .min(1)
+  .refine(
+    (value) => {
+      if (value.startsWith("/") || value.includes("\0") || value.includes("\\")) return false;
+      const segments = value.split("/");
+      return (
+        segments.length <= FOLDER_SCAN_DEPTH &&
+        segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..")
+      );
+    },
+    { message: "Not a repository path inside the folder" },
+  );
 
 export const repoTargetSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("project"), projectId: z.string().min(1) }),
@@ -116,6 +142,35 @@ export const commitDetailSchema = z.object({
   files: z.array(fileChangeSchema),
 });
 export type CommitDetail = z.infer<typeof commitDetailSchema>;
+
+export const folderRepoSchema = z.object({ relativePath: folderRelativePathSchema, name: z.string() });
+export type FolderRepo = z.infer<typeof folderRepoSchema>;
+
+export const folderReposRpc = defineRpc({
+  name: "folder.list-repos",
+  input: z.object({ folderId: z.string().min(1) }),
+  output: z.object({ repos: z.array(folderRepoSchema), truncated: z.boolean() }),
+});
+
+const inspectPathOutputSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("repo"), path: z.string(), suggestedName: z.string() }),
+  z.object({
+    kind: z.literal("folder"),
+    path: z.string(),
+    suggestedName: z.string(),
+    repoCount: z.number().int().nonnegative(),
+    truncated: z.boolean(),
+  }),
+  z.object({ kind: z.literal("invalid"), reason: z.string() }),
+]);
+export type InspectPathOutput = z.infer<typeof inspectPathOutputSchema>;
+
+/** Classifies a path for the add form: a repository, a folder of repositories, or neither. */
+export const inspectPathRpc = defineRpc({
+  name: "repo.inspect-path",
+  input: z.object({ path: z.string().min(1) }),
+  output: inspectPathOutputSchema,
+});
 
 const validatePathOutputSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), path: z.string(), suggestedName: z.string() }),

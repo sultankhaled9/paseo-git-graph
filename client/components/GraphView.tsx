@@ -146,12 +146,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     setScope(next);
     setMatchPosition(0);
   }, []);
-  const updating = repo.updating;
+  const waitingForLog = repo.loading || repo.updating;
   useEffect(() => {
-    if (!pendingJump.current || updating) return;
+    if (!pendingJump.current || waitingForLog) return;
     pendingJump.current = false;
     scrollToMatch(0);
-  }, [scrollToMatch, updating]);
+  }, [scrollToMatch, waitingForLog]);
   // The detail pane takes width from the list, so rows drop their author and date columns.
   const condensed = narrow || activeSelection !== null;
 

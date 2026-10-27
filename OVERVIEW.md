@@ -10,7 +10,7 @@ Use the search box to find commits by message, author, or the start of a hash. M
 
 ## Where it appears
 
-- **Git Graph screen**: opened from the sidebar or with "Open Git Graph" in the Command Center. Add repositories by their absolute path with "Add repository", and switch between them in the list.
+- **Git Graph screen**: opened from the sidebar or with "Open Git Graph" in the Command Center. Use "Add repository" with an absolute path. A path to a repository adds that repository. A path to a folder that contains repositories (looked for two folders deep, for example `projects/api` and `projects/client/web`) shows how many it found and adds the folder as a group. The group stays in sync: it is rescanned every 30 seconds while the screen is open, when you come back to the window, and with its rescan button, so newly cloned repositories appear and deleted ones disappear. Hidden folders, `node_modules`, and symbolic links are skipped.
 - **Workspace panel**: "Show git graph for this workspace" in the Command Center opens a Git Graph tab for the repository of the current workspace. No setup is needed.
 - **Explorer**: in a workspace's Explorer, choose Git Graph from the add tab button. The graph then sits beside Files and Changes and always shows that workspace's repository. Add it once in each workspace where you want it.
 
@@ -22,7 +22,7 @@ Git must be installed on the machine running the Paseo daemon. Requires Paseo 0.
 
 ## What it reads
 
-The plugin is read-only. It runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine and never changes them: no checkout, commit, fetch, or push. It reads only repositories you added on the Git Graph screen or that belong to an open Paseo git workspace, and shows uncommitted diffs only for files git reports as changed. Nothing is sent anywhere else. The list of tracked repositories is stored in the plugin's settings on the daemon.
+The plugin is read-only. It runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine and never changes them: no checkout, commit, fetch, or push. It reads only repositories you added on the Git Graph screen, repositories found inside folders you added, or the repository of an open Paseo git workspace, and shows uncommitted diffs only for files git reports as changed. Scanning a folder only lists its subfolders; it does not read file contents. Nothing is sent anywhere else. The lists of tracked repositories and folders are stored in the plugin's settings on the daemon.
 
 ## Limits
 
@@ -30,3 +30,5 @@ The plugin is read-only. It runs read-only git commands such as `git status`, `g
 - Diffs larger than 256 KB are cut off with a notice.
 - The uncommitted changes list shows up to 500 files; the counts stay exact.
 - Stash entries are not drawn in the graph.
+- A folder group lists up to 300 repositories. A repository tracked on its own and also inside a tracked folder appears in both places.
+- Very wide histories show up to 10 branch lanes side by side; when the window is too narrow for every column, the author and date columns are hidden.

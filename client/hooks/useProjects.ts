@@ -1,13 +1,16 @@
 import { useRpc, useSettings } from "@getpaseo/plugin/client";
 import { useCallback } from "react";
-import { MAX_PROJECTS, PROJECT_NAME_MAX_LENGTH } from "../../shared/constants";
+import { MAX_FOLDERS, MAX_PROJECTS, PROJECT_NAME_MAX_LENGTH } from "../../shared/constants";
 import {
   type Folder,
+  inspectPathRpc,
+  type InspectPathOutput,
   type Project,
   type ProjectsDocument,
   projectsSettings,
   validatePathRpc,
 } from "../../shared/contracts";
+import { withChanges } from "../../shared/projects-document";
 
 const ID_RADIX = 36;
 const RANDOM_PREFIX_LENGTH = 2;
@@ -15,6 +18,8 @@ const NO_PROJECTS: readonly Project[] = [];
 const NO_FOLDERS: readonly Folder[] = [];
 
 export type AddProjectResult = { ok: true; project: Project } | { ok: false; reason: string };
+export type AddFolderResult = { ok: true; folder: Folder } | { ok: false; reason: string };
+export type FolderInspection = Extract<InspectPathOutput, { kind: "folder" }>;
 
 function newProjectId(): string {
   return `${Date.now().toString(ID_RADIX)}${Math.random().toString(ID_RADIX).slice(RANDOM_PREFIX_LENGTH)}`;
@@ -27,17 +32,17 @@ function newProjectId(): string {
 export function useProjects() {
   const settings = useSettings(projectsSettings);
   const validatePath = useRpc(validatePathRpc);
+  const inspect = useRpc(inspectPathRpc);
   const ready = settings.status === "ready";
   const projects = ready ? settings.values.projects : NO_PROJECTS;
   const folders = ready ? settings.values.folders : NO_FOLDERS;
   const revision = ready ? settings.revision : null;
   const { save, reload } = settings;
 
-  // Every save writes the whole document, so changing one list must carry the other unchanged.
   const persist = useCallback(
     async (changes: Partial<ProjectsDocument>): Promise<boolean> => {
       if (revision === null) return false;
-      const saved = await save({ projects: [...projects], folders: [...folders], ...changes }, revision);
+      const saved = await save(withChanges({ projects, folders }, changes), revision);
       if (!saved) await reload();
       return saved;
     },
@@ -67,6 +72,30 @@ export function useProjects() {
     [revision, projects, validatePath, persist],
   );
 
+  const addFolder = useCallback(
+    async (inspection: FolderInspection, name: string): Promise<AddFolderResult> => {
+      if (revision === null) return { ok: false, reason: "Projects are still loading" };
+      if (folders.length >= MAX_FOLDERS) return { ok: false, reason: `You can track up to ${MAX_FOLDERS} folders` };
+      if (folders.some((folder) => folder.path === inspection.path)) {
+        return { ok: false, reason: "This folder is already tracked" };
+      }
+      const folder: Folder = {
+        id: newProjectId(),
+        name: (name.trim() || inspection.suggestedName).slice(0, PROJECT_NAME_MAX_LENGTH),
+        path: inspection.path,
+      };
+      return (await persist({ folders: [...folders, folder] }))
+        ? { ok: true, folder }
+        : { ok: false, reason: "Projects changed elsewhere. Try again." };
+    },
+    [revision, folders, persist],
+  );
+
+  const removeFolder = useCallback(
+    (id: string): Promise<boolean> => persist({ folders: folders.filter((folder) => folder.id !== id) }),
+    [folders, persist],
+  );
+
   const remove = useCallback(
     (id: string): Promise<boolean> => persist({ projects: projects.filter((project) => project.id !== id) }),
     [projects, persist],
@@ -80,5 +109,8 @@ export function useProjects() {
     saving: settings.saving,
     add,
     remove,
+    inspect,
+    addFolder,
+    removeFolder,
   };
 }

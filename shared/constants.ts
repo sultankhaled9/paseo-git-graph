@@ -18,15 +18,16 @@ export const LANE_WIDTH = 14;
 export const NODE_SIZE = 10;
 export const EDGE_THICKNESS = 2;
 
+/** No red or pink hues: red is reserved for the user's own commits. */
 export const LANE_PALETTE: readonly string[] = [
   "#3b82f6",
   "#f97316",
   "#10b981",
-  "#e11d48",
+  "#14b8a6",
   "#a855f7",
   "#eab308",
   "#06b6d4",
-  "#ec4899",
+  "#78716c",
   "#84cc16",
   "#6366f1",
 ];

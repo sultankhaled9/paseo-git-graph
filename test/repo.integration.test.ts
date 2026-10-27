@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DIFF_MAX_BYTES } from "../shared/constants";
 import type { Project } from "../shared/contracts";
 import { type RepoGuardDeps, resolveRepo, validateRepoPath } from "../server/repo-guard";
-import { getCommit, getDiff, getLog, getRevision, getStatus } from "../server/repo";
+import { getCommit, getDiff, getIdentity, getLog, getRevision, getStatus } from "../server/repo";
 
 const GIT_ENV = {
   ...process.env,
@@ -33,7 +33,15 @@ async function initRepo(path: string): Promise<void> {
   execFileSync("git", ["-c", "init.defaultBranch=main", "init", "-q", path], { env: GIT_ENV });
 }
 
+const ISOLATED_GIT_ENV = { GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } as const;
+const savedEnv: Record<string, string | undefined> = {};
+
 beforeAll(async () => {
+  // The server reads process.env; keep the developer's global identity out of these tests.
+  for (const [key, value] of Object.entries(ISOLATED_GIT_ENV)) {
+    savedEnv[key] = process.env[key];
+    process.env[key] = value;
+  }
   base = await realpath(await mkdtemp(join(tmpdir(), "git-graph-test-")));
   repo = join(base, "repo");
   otherRepo = join(base, "other");
@@ -59,6 +67,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  for (const [key, value] of Object.entries(savedEnv)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
   if (base) await rm(base, { recursive: true, force: true });
 });
 
@@ -155,6 +167,22 @@ describe("repository operations", () => {
     git(repo, "commit", "-qm", "wip");
     const committed = await getRevision(repo);
     expect(committed.refsToken).not.toBe(edited.refsToken);
+  });
+});
+
+describe("repository identity", () => {
+  it("reads the configured name and email", async () => {
+    git(repo, "config", "user.name", "Ada Lovelace");
+    git(repo, "config", "user.email", "Ada@Example.com");
+    expect((await getStatus(repo)).identity).toEqual({ name: "Ada Lovelace", email: "Ada@Example.com" });
+  });
+
+  it("reports an unset identity as null", async () => {
+    git(repo, "config", "user.name", "Ada Lovelace");
+    git(repo, "config", "user.email", "Ada@Example.com");
+    git(repo, "config", "--unset", "user.name");
+    git(repo, "config", "--unset", "user.email");
+    expect(await getIdentity(repo)).toEqual({ name: null, email: null });
   });
 });
 

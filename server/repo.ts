@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { DIFF_MAX_BYTES } from "../shared/constants";
-import type { CommitDetail, CommitSummary, RepoStatus } from "../shared/contracts";
+import type { CommitDetail, CommitSummary, Identity, RepoStatus } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
 import { COMMIT_FORMAT, LOG_FORMAT, parseCommitDetail, parseLog, parseStatus } from "./parse";
 
@@ -18,8 +18,22 @@ function sha1(...parts: readonly string[]): string {
   return hash.digest("hex");
 }
 
+async function configValue(root: string, key: string): Promise<string | null> {
+  const value = (await runGitOptional(root, ["config", "--get", key])).trim();
+  return value.length > 0 ? value : null;
+}
+
+export async function getIdentity(root: string): Promise<Identity> {
+  const [name, email] = await Promise.all([
+    configValue(root, "user.name"),
+    configValue(root, "user.email"),
+  ]);
+  return { name, email };
+}
+
 export async function getStatus(root: string): Promise<RepoStatus> {
-  return parseStatus(await runGit(root, STATUS_ARGS), root);
+  const [stdout, identity] = await Promise.all([runGit(root, STATUS_ARGS), getIdentity(root)]);
+  return { ...parseStatus(stdout, root), identity };
 }
 
 export async function getLog(

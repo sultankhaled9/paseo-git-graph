@@ -59,8 +59,15 @@ export const statusFileSchema = z.object({
 });
 export type StatusFile = z.infer<typeof statusFileSchema>;
 
+export const identitySchema = z.object({
+  name: z.string().nullable(),
+  email: z.string().nullable(),
+});
+export type Identity = z.infer<typeof identitySchema>;
+
 export const repoStatusSchema = z.object({
   root: z.string(),
+  identity: identitySchema,
   branch: z.string().nullable(),
   headOid: z.string().nullable(),
   detached: z.boolean(),
@@ -75,6 +82,7 @@ export const repoStatusSchema = z.object({
   filesTruncated: z.boolean(),
 });
 export type RepoStatus = z.infer<typeof repoStatusSchema>;
+export type WorktreeStatus = Omit<RepoStatus, "identity">;
 
 export const fileChangeSchema = z.object({
   path: z.string(),

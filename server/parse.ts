@@ -4,7 +4,7 @@ import type {
   CommitSummary,
   FileChange,
   Ref,
-  RepoStatus,
+  WorktreeStatus,
   StatusFile,
 } from "../shared/contracts";
 
@@ -113,8 +113,8 @@ function afterFields(line: string, count: number): string {
   return line.slice(index + 1);
 }
 
-export function parseStatus(stdout: string, root: string): RepoStatus {
-  const status: RepoStatus = {
+export function parseStatus(stdout: string, root: string): WorktreeStatus {
+  const status: WorktreeStatus = {
     root,
     branch: null,
     headOid: null,

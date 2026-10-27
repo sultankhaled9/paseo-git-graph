@@ -124,3 +124,22 @@ export const WIP_NODE_ID = "wip";
 export function withWorkInProgress(commits: readonly GraphCommit[], headOid: string | null): GraphCommit[] {
   return [{ hash: WIP_NODE_ID, parents: headOid ? [headOid] : [] }, ...commits];
 }
+
+/**
+ * Fits a row into `maxLanes` columns: every column beyond the limit, for the node and its edges
+ * alike, maps to the last visible lane, so clipped lanes merge there and stay connected.
+ */
+export function projectRow(row: GraphRow, maxLanes: number): GraphRow {
+  const last = Math.max(maxLanes - 1, 0);
+  if (row.column <= last && row.edges.every((edge) => edge.column <= last)) return row;
+  const seen = new Set<string>();
+  const edges: GraphEdge[] = [];
+  for (const edge of row.edges) {
+    const column = Math.min(edge.column, last);
+    const key = `${edge.half}:${column}:${edge.toNode}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    edges.push({ ...edge, column });
+  }
+  return { ...row, column: Math.min(row.column, last), edges };
+}

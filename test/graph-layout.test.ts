@@ -3,6 +3,7 @@ import {
   type GraphCommit,
   type GraphEdge,
   layoutGraph,
+  projectRow,
   WIP_NODE_ID,
   withWorkInProgress,
 } from "../shared/graph-layout";
@@ -103,5 +104,26 @@ describe("layoutGraph", () => {
   it("keeps work in progress unconnected in a repository without commits", () => {
     const layout = layoutGraph(withWorkInProgress([], null));
     expect(layout.rows).toEqual([{ column: 0, color: 0, edges: [] }]);
+  });
+
+  it("projects lanes beyond the limit onto the last visible lane, keeping node and edges together", () => {
+    const row = {
+      column: 12,
+      color: 5,
+      edges: [
+        { half: "top" as const, column: 12, color: 5, toNode: true },
+        { half: "bottom" as const, column: 12, color: 5, toNode: true },
+        { half: "top" as const, column: 11, color: 4, toNode: false },
+        { half: "top" as const, column: 2, color: 1, toNode: false },
+      ],
+    };
+    const projected = projectRow(row, 10);
+    expect(projected.column).toBe(9);
+    expect(edgeKeys(projected.edges)).toEqual(["bottom:9*", "top:2", "top:9", "top:9*"]);
+  });
+
+  it("returns rows inside the limit unchanged", () => {
+    const row = { column: 1, color: 0, edges: [{ half: "top" as const, column: 1, color: 0, toNode: true }] };
+    expect(projectRow(row, 10)).toBe(row);
   });
 });

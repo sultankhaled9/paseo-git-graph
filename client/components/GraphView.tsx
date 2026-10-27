@@ -15,6 +15,7 @@ import type { CommitSummary, LogScope, RepoTarget } from "../../shared/contracts
 import {
   type GraphRow as GraphRowLayout,
   layoutGraph,
+  projectRow,
   WIP_NODE_ID,
   withWorkInProgress,
 } from "../../shared/graph-layout";
@@ -93,7 +94,9 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     () => layoutGraph(showWip ? withWorkInProgress(repo.commits, wipParent) : repo.commits),
     [repo.commits, showWip, wipParent],
   );
-  const wipRow = showWip ? graph.rows[0] : undefined;
+  const laneCount = Math.min(Math.max(graph.laneCount, MIN_GRAPH_LANES), MAX_GRAPH_LANES);
+  const firstRow = graph.rows[0];
+  const wipRow = showWip && firstRow ? projectRow(firstRow, laneCount) : undefined;
   // The WIP row shares the selection with commits; its id cannot collide with a hex hash.
   const wipSelected = selectedHash === WIP_NODE_ID;
   const activeSelection = wipSelected && !showWip ? null : selectedHash;
@@ -106,10 +109,10 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     return repo.commits.flatMap((commit, index) => {
       const row = commitRows[index];
       if (!row) return [];
-      return [{ commit, row, mine: isMine({ name: commit.authorName, email: commit.authorEmail }, identity) }];
+      const mine = isMine({ name: commit.authorName, email: commit.authorEmail }, identity);
+      return [{ commit, row: projectRow(row, laneCount), mine }];
     });
-  }, [repo.commits, graph, showWip, identityName, identityEmail]);
-  const laneCount = Math.min(Math.max(graph.laneCount, MIN_GRAPH_LANES), MAX_GRAPH_LANES);
+  }, [repo.commits, graph, showWip, laneCount, identityName, identityEmail]);
 
   const searching = query.trim().length > 0;
   const matchIndices = useMemo(

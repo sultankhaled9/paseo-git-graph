@@ -17,7 +17,8 @@ const COMPACT_PICKER_MAX_HEIGHT = 240;
 
 /**
  * The selection while it still exists. A repository missing from its folder only counts as gone
- * after a successful rescan, so a slow or failed scan never drops what the user is looking at.
+ * after a complete, successful rescan, so a slow, failed, or truncated scan never drops what the
+ * user is looking at.
  */
 function stillAvailable(
   selection: RepoTarget | null,
@@ -31,7 +32,8 @@ function stillAvailable(
     case "folder-repo": {
       const scan = folderScans.find((candidate) => candidate.folder.id === selection.folderId);
       if (!scan) return null;
-      if (!scan.scanned) return selection;
+      // A truncated scan is incomplete, so a missing repository may simply be past the limit.
+      if (!scan.scanned || scan.truncated) return selection;
       return scan.repos.some((repo) => repo.relativePath === selection.relativePath) ? selection : null;
     }
     case "workspace":

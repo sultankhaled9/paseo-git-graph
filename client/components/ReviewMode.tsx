@@ -108,16 +108,17 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
     if (listed.size !== reviewed.size) onReviewedChange(listed);
   }, [items, reviewed, onReviewedChange]);
 
-  // The file on screen changed after it was marked: it needs another look.
+  // The file on screen changed after it was marked, or grew too large to show completely:
+  // either way the mark no longer stands.
   useEffect(() => {
-    if (!current || currentPrint === null) return;
+    if (!current || !diff.data || diff.error) return;
     const marked = reviewed.get(current.key);
     if (marked !== undefined && marked !== currentPrint) {
       const next = new Map(reviewed);
       next.delete(current.key);
       onReviewedChange(next);
     }
-  }, [current, currentPrint, reviewed, onReviewedChange]);
+  }, [current, currentPrint, diff.data, diff.error, reviewed, onReviewedChange]);
 
   const progress = reviewProgress(items, reviewed, status.filesTruncated);
   const allMarked = progress.complete;

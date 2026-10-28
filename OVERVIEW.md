@@ -10,7 +10,13 @@ Use the search box to find commits by message, author, or the start of a hash. M
 
 ## My Changes
 
-A second tab, My Changes, explains in plain words everything that is only on your machine or only on the server. The top line sums it up, for example "3 files changed, 2 commits not pushed to origin/main, 1 commit to pull from origin/main", or "Everything is committed and in sync with origin/main". Below it, only the parts that apply are shown, each with a short explanation of what it means and the usual next step: files with conflicts, staged files ready to commit, changed files not staged yet, new untracked files, commits not pushed yet (or, on a branch that tracks no remote branch, commits no remote has yet), and commits to pull. Select a file to read its uncommitted diff, or a commit to see its details. Commits to pull reflect your last fetch; the plugin never fetches, commits, pushes, or pulls for you. Open it from a workspace's tabs, its Explorer, or "Show my changes for this workspace" in the Command Center. Like Git Graph, it finds the repositories inside a workspace folder that is not a repository itself.
+A second tab, My Changes, explains in plain words everything that is only on your machine or only on the server. The top line sums it up, for example "3 files changed, 2 commits not pushed to origin/main, 1 commit to pull from origin/main", or "Everything is committed and in sync with origin/main". Below it, only the parts that apply are shown, each with a short explanation of what it means and the usual next step: files with conflicts, staged files ready to commit, changed files not staged yet, new untracked files, commits not pushed yet (or, on a branch that tracks no remote branch, commits no remote has yet), and commits to pull. Changed files appear as cards grouped by folder, each with a file-type icon, a badge (new, edited, deleted, renamed, conflict), its added and removed line counts, and a small bar showing how big the change is. Select a file to read its uncommitted diff, or a commit to see its details.
+
+"Review changes" steps through every uncommitted file one at a time with its full diff and a checklist. Mark each file as reviewed; if a file changes after you reviewed it, its mark is removed, and before saying "All files reviewed" every file is checked once more against its latest version. Review progress is kept while the tab is open and is not saved. Commits to pull reflect your last fetch; the plugin never fetches, commits, pushes, or pulls for you. Open it from a workspace's tabs, its Explorer, or "Show my changes for this workspace" in the Command Center. Like Git Graph, it finds the repositories inside a workspace folder that is not a repository itself.
+
+## Reading diffs
+
+Diffs show old and new line numbers, added lines in green and removed lines in red with the changed words highlighted, and collapse long unchanged stretches into "N unchanged lines". When there is room, the diff can be shown side by side (old on the left, new on the right); the Expand button gives a diff the full width of the view.
 
 ## Where it appears
 
@@ -34,6 +40,6 @@ The plugin is read-only. It runs read-only git commands such as `git status`, `g
 - Diffs larger than 256 KB are cut off with a notice.
 - The uncommitted changes list shows up to 500 files; the counts stay exact.
 - Stash entries are not drawn in the graph.
-- My Changes lists up to 50 commits in each direction (to push, to pull).
+- My Changes lists up to 50 commits in each direction (to push, to pull). Line counts for uncommitted files refresh when git status changes, so a second edit to an already changed file updates its count a little later than its diff. New untracked files show no line counts.
 - A folder group lists up to 300 repositories. A repository tracked on its own and also inside a tracked folder appears in both places.
 - Very wide histories show up to 10 branch lanes side by side, or 4 in narrow views such as the Explorer; when the window is too narrow for every column, the author and date columns are hidden.

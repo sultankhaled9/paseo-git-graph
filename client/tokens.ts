@@ -31,6 +31,9 @@ export const MONO_FONT = "monospace";
 /** File cards: the size bar comparing how much each file changed. */
 export const SIZE_BAR_WIDTH = 48;
 export const SIZE_BAR_HEIGHT = 6;
+/** Review mode: checklist column width, and how many diffs are re-fetched at once before completion. */
+export const REVIEW_LIST_WIDTH = 260;
+export const REVIEW_VERIFY_CONCURRENCY = 4;
 /** Diff viewer: width of one line-number column, the pane width that allows side by side, and tint strengths. */
 export const DIFF_GUTTER_WIDTH = 36;
 export const DIFF_SPLIT_MIN_WIDTH = 760;

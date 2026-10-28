@@ -12,6 +12,7 @@ import {
 } from "../../shared/changes-text";
 import type { CommitSummary, FileStat, Identity, RepoTarget, WipArea } from "../../shared/contracts";
 import { changeBadge, groupByFolder } from "../../shared/file-groups";
+import type { ReviewedFiles } from "../../shared/review";
 import { pluralize } from "../../shared/format";
 import { describeWipChange, groupWorkInProgress } from "../../shared/status-text";
 import { useNow } from "../hooks/useNow";
@@ -21,6 +22,7 @@ import { CommitDetail } from "./CommitDetail";
 import { CommitRow } from "./CommitRow";
 import { DiffPane, type ExpandControl } from "./DiffView";
 import { FileCard } from "./FileCard";
+import { ReviewMode } from "./ReviewMode";
 import { StatusBar } from "./StatusBar";
 
 const LIST_FLEX = 3;
@@ -218,6 +220,13 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const stagedStats = useMemo(() => statsByPath(wipStats.data?.staged), [wipStats.data?.staged]);
   const unstagedStats = useMemo(() => statsByPath(wipStats.data?.unstaged), [wipStats.data?.unstaged]);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewed, setReviewed] = useState<ReviewedFiles>(new Map());
+  const startReview = useCallback(() => {
+    setSelection(null);
+    setReviewing(true);
+  }, []);
+  const exitReview = useCallback(() => setReviewing(false), []);
   const [width, setWidth] = useState<number | null>(null);
   const onLayout = useCallback((event: LayoutChangeEvent) => setWidth(Math.round(event.nativeEvent.layout.width)), []);
   const narrow = compact || (width !== null && width < NARROW_LAYOUT_WIDTH);
@@ -306,6 +315,28 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
           ) : null}
         </View>
         {noRemote ? <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>{noRemote}</Text> : null}
+        {filesChanged > 0 ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Review changes file by file"
+            onPress={startReview}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              alignSelf: "flex-start",
+              gap: SPACING.xs,
+              paddingHorizontal: SPACING.md,
+              paddingVertical: SPACING.sm,
+              borderRadius: RADIUS.chip,
+              backgroundColor: colors.accent,
+            }}
+          >
+            <Icon name="ListChecks" size={ICON_SIZE} color={colors.accentForeground} />
+            <Text style={{ color: colors.accentForeground, fontSize: FONT_SIZE.small, fontWeight: "700" }}>
+              Review changes{reviewed.size > 0 ? ` (${reviewed.size} reviewed)` : ""}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {groups.map((group) => {
@@ -412,6 +443,24 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
         onSelectCommit={selectCommit}
         onClose={narrow ? undefined : close}
       />
+    );
+  }
+
+  if (reviewing) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
+        <StatusBar status={repoStatus} theme={theme} />
+        <ReviewMode
+          target={target}
+          status={repoStatus}
+          worktreeToken={tokens?.worktreeToken}
+          reviewed={reviewed}
+          onReviewedChange={setReviewed}
+          theme={theme}
+          narrow={narrow}
+          onExit={exitReview}
+        />
+      </View>
     );
   }
 

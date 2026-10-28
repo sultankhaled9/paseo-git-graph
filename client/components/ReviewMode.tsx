@@ -167,21 +167,26 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
 
   // While "All reviewed" is on screen, keep checking in the background: a file that is not shown
   // can be edited again without changing git status, and only the shown file's diff polls.
+  // Each re-check is scheduled only after the previous one finished, so slow git calls on a
+  // large repository never stack up overlapping sweeps.
   useEffect(() => {
     if (!finished) return;
     let cancelled = false;
-    const recheck = () => {
-      void freshPrints(() => cancelled).then((fresh) => {
-        if (!fresh) return;
-        const kept = keepUnchanged(reviewed, fresh);
-        if (kept.size !== reviewed.size) onReviewedChange(kept);
-      });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const recheck = async () => {
+      const fresh = await freshPrints(() => cancelled);
+      if (cancelled || !fresh) return;
+      const kept = keepUnchanged(reviewed, fresh);
+      if (kept.size !== reviewed.size) {
+        onReviewedChange(kept);
+        return;
+      }
+      timer = setTimeout(() => void recheck(), REVIEW_RECHECK_MS);
     };
-    recheck();
-    const timer = setInterval(recheck, REVIEW_RECHECK_MS);
+    void recheck();
     return () => {
       cancelled = true;
-      clearInterval(timer);
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [finished, worktreeToken, reviewed, freshPrints, onReviewedChange]);
 

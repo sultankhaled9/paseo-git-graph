@@ -98,7 +98,9 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
   const position = Math.min(index, Math.max(items.length - 1, 0));
   const current = items[position] ?? null;
   const diff = useWipDiff(target, current ? { path: current.path, area: current.area } : null, worktreeToken);
-  const currentPrint = diff.data && !diff.error ? fingerprint(diff.data.text) : null;
+  // A diff cut off at the size limit was not fully shown, so it cannot be marked as reviewed.
+  const tooLarge = diff.data?.truncated ?? false;
+  const currentPrint = diff.data && !diff.error && !tooLarge ? fingerprint(diff.data.text) : null;
 
   // Files that no longer have changes in their area lose their marks.
   useEffect(() => {
@@ -133,7 +135,7 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
         items.slice(start, start + REVIEW_VERIFY_CONCURRENCY).map(async (item) => {
           try {
             const result = await fetchWipDiff({ target, path: item.path, area: item.area });
-            fresh.set(item.key, fingerprint(result.text));
+            if (!result.truncated) fresh.set(item.key, fingerprint(result.text));
           } catch {
             // A diff that cannot be fetched cannot count as reviewed.
           }
@@ -303,6 +305,11 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
             {AREA_LABELS[current.area]}
             {statusFile ? `, ${describeWipChange(statusFile, current.area)}` : ""}
           </Text>
+          {tooLarge ? (
+            <Text style={{ color: colors.statusWarning, fontSize: FONT_SIZE.small }}>
+              This change is too large to show completely here. Review it in your editor; it cannot be marked as reviewed in this view.
+            </Text>
+          ) : null}
         </View>
         {currentReviewed ? (
           <Button label="Reviewed" icon="CircleCheck" onPress={unmark} theme={theme} />

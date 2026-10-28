@@ -12,6 +12,7 @@ import {
   revisionRpc,
   statusRpc,
   syncCommitsRpc,
+  wipStatsRpc,
   wipDiffRpc,
   workspaceReposRpc,
 } from "./shared/contracts";
@@ -30,6 +31,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(statusRpc, (input, { paseo }) => repo.status(input, paseo));
   server.handle(identityRpc, (input, { paseo }) => repo.identity(input, paseo));
   server.handle(syncCommitsRpc, (input, { paseo }) => repo.syncCommits(input, paseo));
+  server.handle(wipStatsRpc, (input, { paseo }) => repo.wipStats(input, paseo));
   server.handle(logRpc, (input, { paseo }) => repo.log(input, paseo));
   server.handle(commitRpc, (input, { paseo }) => repo.commit(input, paseo));
   server.handle(diffRpc, (input, { paseo }) => repo.diff(input, paseo));

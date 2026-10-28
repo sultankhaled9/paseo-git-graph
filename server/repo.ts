@@ -8,6 +8,7 @@ import type {
   LogScope,
   RepoStatus,
   SyncCommits,
+  WipStats,
   WipArea,
 } from "../shared/contracts";
 import { type CappedOutput, runGit, runGitCapped, runGitOptional } from "./git";
@@ -18,6 +19,7 @@ import {
   parseCommitDetail,
   parseIdentity,
   parseLog,
+  parseNumstat,
   parseStatus,
 } from "./parse";
 
@@ -219,4 +221,15 @@ export async function getSyncCommits(root: string): Promise<SyncCommits> {
   if (!hasRemotes) return { mode: "none", upstream: null, ...empty };
   const localOnly = await syncLog(root, ["HEAD", "--not", "--remotes"]);
   return { mode: "remotes", upstream: null, ...empty, toPush: localOnly.commits, toPushTruncated: localOnly.truncated };
+}
+
+const NUMSTAT_ARGS: readonly string[] = ["diff", "--numstat", "-z", "-M", "--no-ext-diff", "--no-textconv"];
+
+/** Line counts for staged and not-staged changes; two cheap numstat runs, no file contents read. */
+export async function getWipStats(root: string): Promise<WipStats> {
+  const [staged, unstaged] = await Promise.all([
+    runGit(root, [...NUMSTAT_ARGS, "--cached"]),
+    runGit(root, NUMSTAT_ARGS),
+  ]);
+  return { staged: parseNumstat(staged), unstaged: parseNumstat(unstaged) };
 }

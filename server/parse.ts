@@ -2,6 +2,7 @@ import { STATUS_MAX_FILES, STATUS_UNCHANGED as UNCHANGED } from "../shared/const
 import type {
   ChangeType,
   CommitDetail,
+  FileStat,
   Identity,
   CommitSummary,
   FileChange,
@@ -201,6 +202,38 @@ function toCount(value: string): number | null {
   return value === BINARY_STAT ? null : Number(value);
 }
 
+interface NumstatRecord {
+  stat: FileStat;
+  /** Extra NUL-separated tokens the record used after its first (rename old and new paths). */
+  extraTokens: number;
+}
+
+/** Reads one `--numstat -z` record at `index`: "A\tD\tpath", or "A\tD\t" then old and new paths. */
+function readNumstat(tokens: readonly string[], index: number): NumstatRecord | null {
+  const match = NUMSTAT_PATTERN.exec(tokens[index] ?? "");
+  if (!match) return null;
+  const [, additions = BINARY_STAT, deletions = BINARY_STAT, path = ""] = match;
+  const counts = { additions: toCount(additions), deletions: toCount(deletions) };
+  if (path.length > 0) return { stat: { path, ...counts }, extraTokens: 0 };
+  return {
+    stat: { path: tokens[index + 2] ?? "", oldPath: tokens[index + 1] ?? "", ...counts },
+    extraTokens: 2,
+  };
+}
+
+/** Parses `git diff --numstat -z` output into per-file line counts (null counts for binary files). */
+export function parseNumstat(stdout: string): FileStat[] {
+  const tokens = stdout.replace(/^\n/, "").split("\0");
+  const stats: FileStat[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    const record = readNumstat(tokens, index);
+    if (!record) continue;
+    stats.push(record.stat);
+    index += record.extraTokens;
+  }
+  return stats;
+}
+
 /**
  * Parses `git show -z --raw --numstat --format=COMMIT_FORMAT`. Raw records (":modes shas STATUS",
  * then the path, or old and new paths for renames and copies) come first, then numstat records;
@@ -241,18 +274,12 @@ export function parseCommitDetail(stdout: string): CommitDetail {
       }
       continue;
     }
-    const match = NUMSTAT_PATTERN.exec(token);
-    if (!match) continue;
-    const [, additions = BINARY_STAT, deletions = BINARY_STAT, path = ""] = match;
-    const counts = { additions: toCount(additions), deletions: toCount(deletions) };
-    if (path.length === 0) {
-      const oldPath = tokens[index + 1] ?? "";
-      const newPath = tokens[index + 2] ?? "";
-      index += 2;
-      files.push({ path: newPath, oldPath, change: changes.get(changeKey(newPath, oldPath)) ?? "renamed", ...counts });
-    } else {
-      files.push({ path, change: changes.get(changeKey(path)) ?? "modified", ...counts });
-    }
+    const record = readNumstat(tokens, index);
+    if (!record) continue;
+    index += record.extraTokens;
+    const { stat } = record;
+    const fallback: ChangeType = stat.oldPath === undefined ? "modified" : "renamed";
+    files.push({ ...stat, change: changes.get(changeKey(stat.path, stat.oldPath)) ?? fallback });
   }
 
   return {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { STATUS_MAX_FILES } from "../shared/constants";
-import { parseCommitDetail, parseIdentity, parseLog, parseRefs, parseStatus } from "../server/parse";
+import { parseCommitDetail, parseIdentity, parseLog, parseNumstat, parseRefs, parseStatus } from "../server/parse";
 
 const F = "\x1f";
 const R = "\x1e";
@@ -235,5 +235,19 @@ describe("parseIdentity", () => {
   it("reports missing keys as null", () => {
     expect(parseIdentity("")).toEqual({ name: null, email: null });
     expect(parseIdentity("user.name Ada\n")).toEqual({ name: "Ada", email: null });
+  });
+});
+
+describe("parseNumstat", () => {
+  it("reads plain, renamed, and binary records", () => {
+    expect(parseNumstat("3\t1\tsrc/a.ts\x000\t0\t\x00old name.txt\x00new name.txt\x00-\t-\tlogo.png\x00")).toEqual([
+      { path: "src/a.ts", additions: 3, deletions: 1 },
+      { path: "new name.txt", oldPath: "old name.txt", additions: 0, deletions: 0 },
+      { path: "logo.png", additions: null, deletions: null },
+    ]);
+  });
+
+  it("returns nothing for a clean tree", () => {
+    expect(parseNumstat("")).toEqual([]);
   });
 });

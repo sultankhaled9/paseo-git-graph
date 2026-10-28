@@ -10,6 +10,7 @@ import type {
   revisionRpc,
   statusRpc,
   syncCommitsRpc,
+  wipStatsRpc,
   wipDiffRpc,
 } from "../shared/contracts";
 import {
@@ -27,6 +28,7 @@ import {
   getRevision,
   getStatus,
   getSyncCommits,
+  getWipStats,
   getWipDiff,
 } from "./repo";
 
@@ -60,6 +62,12 @@ export function createRepoHandlers(readSettings: ReadSettings) {
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof workspaceReposRpc>> {
       return listWorkspaceRepos(workspaceId, guardDeps(paseo));
+    },
+    async wipStats(
+      { target }: RpcInput<typeof wipStatsRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof wipStatsRpc>> {
+      return getWipStats(await resolve(target, paseo));
     },
     async syncCommits(
       { target }: RpcInput<typeof syncCommitsRpc>,

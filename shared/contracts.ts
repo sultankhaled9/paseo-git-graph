@@ -128,13 +128,16 @@ export const changeTypeSchema = z.enum([
 ]);
 export type ChangeType = z.infer<typeof changeTypeSchema>;
 
-export const fileChangeSchema = z.object({
+/** Line counts for one file; null counts mean a binary file. */
+export const fileStatSchema = z.object({
   path: z.string(),
-  change: changeTypeSchema,
   oldPath: z.string().optional(),
   additions: z.number().int().nonnegative().nullable(),
   deletions: z.number().int().nonnegative().nullable(),
 });
+export type FileStat = z.infer<typeof fileStatSchema>;
+
+export const fileChangeSchema = fileStatSchema.extend({ change: changeTypeSchema });
 export type FileChange = z.infer<typeof fileChangeSchema>;
 
 export const commitDetailSchema = z.object({
@@ -258,6 +261,16 @@ export const identityRpc = defineRpc({
  * How the current branch relates to a server copy: "upstream" compares with the tracked branch,
  * "remotes" lists commits that no remote has yet (no tracked branch), "none" means no remote exists.
  */
+export const wipStatsSchema = z.object({ staged: z.array(fileStatSchema), unstaged: z.array(fileStatSchema) });
+export type WipStats = z.infer<typeof wipStatsSchema>;
+
+/** Line counts for uncommitted files, staged and not staged; untracked files are not counted. */
+export const wipStatsRpc = defineRpc({
+  name: "repo.wip-stats",
+  input: z.object({ target: repoTargetSchema }),
+  output: wipStatsSchema,
+});
+
 export const syncModeSchema = z.enum(["upstream", "remotes", "none"]);
 export type SyncMode = z.infer<typeof syncModeSchema>;
 

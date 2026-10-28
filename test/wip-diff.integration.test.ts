@@ -1,10 +1,10 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { wipDiffRpc } from "../shared/contracts";
-import { getWipDiff } from "../server/repo";
+import { getWipDiff, getWipStats } from "../server/repo";
 
 const GIT_ENV = {
   ...process.env,
@@ -117,5 +117,25 @@ describe("getWipDiff", () => {
     expect(wipDiffRpc.input.safeParse({ target, path: "/etc/passwd", area: "untracked" }).success).toBe(false);
     expect(wipDiffRpc.input.safeParse({ target, path: "a\0b", area: "untracked" }).success).toBe(false);
     expect(wipDiffRpc.input.safeParse({ target, path: "a.txt", area: "stash" }).success).toBe(false);
+  });
+});
+
+describe("getWipStats", () => {
+  it("counts staged and not-staged lines, including a staged rename, but not untracked files", async () => {
+    const stats = await getWipStats(repo);
+    expect(stats.staged).toEqual(
+      expect.arrayContaining([
+        { path: "staged.txt", additions: 1, deletions: 0 },
+        { path: "new name.txt", oldPath: "old name.txt", additions: 0, deletions: 0 },
+      ]),
+    );
+    expect(stats.unstaged).toContainEqual({ path: "edited.txt", additions: 1, deletions: 0 });
+    expect([...stats.staged, ...stats.unstaged].some((stat) => stat.path === "untracked.txt")).toBe(false);
+  });
+
+  it("reflects a further edit even though git status output stays the same", async () => {
+    await appendFile(join(repo, "edited.txt"), "again\n");
+    const stats = await getWipStats(repo);
+    expect(stats.unstaged).toContainEqual({ path: "edited.txt", additions: 2, deletions: 0 });
   });
 });

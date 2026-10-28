@@ -1,7 +1,7 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc } from "@getpaseo/plugin/client";
 import { Icon, ScrollView } from "@getpaseo/plugin/client/react-native";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { type RepoStatus, type RepoTarget, wipDiffRpc } from "../../shared/contracts";
 import { fileName } from "../../shared/file-groups";
@@ -16,7 +16,15 @@ import {
 } from "../../shared/review";
 import { describeWipChange } from "../../shared/status-text";
 import { useWipDiff } from "../hooks/useRepoQueries";
-import { FONT_SIZE, ICON_SIZE, RADIUS, REVIEW_LIST_WIDTH, REVIEW_VERIFY_CONCURRENCY, SPACING } from "../tokens";
+import {
+  FONT_SIZE,
+  ICON_SIZE,
+  RADIUS,
+  REVIEW_LIST_WIDTH,
+  REVIEW_RECHECK_MS,
+  REVIEW_VERIFY_CONCURRENCY,
+  SPACING,
+} from "../tokens";
 import { DiffPane } from "./DiffView";
 
 const DIVIDER_WIDTH = 1;
@@ -117,34 +125,62 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
     [reviewed],
   );
 
+  // Fingerprints of every file's current diff; a diff that cannot be fetched gets none.
+  const freshPrints = useCallback(async (isCancelled: () => boolean): Promise<Map<string, string> | null> => {
+    const fresh = new Map<string, string>();
+    for (let start = 0; start < items.length; start += REVIEW_VERIFY_CONCURRENCY) {
+      await Promise.all(
+        items.slice(start, start + REVIEW_VERIFY_CONCURRENCY).map(async (item) => {
+          try {
+            const result = await fetchWipDiff({ target, path: item.path, area: item.area });
+            fresh.set(item.key, fingerprint(result.text));
+          } catch {
+            // A diff that cannot be fetched cannot count as reviewed.
+          }
+        }),
+      );
+      if (isCancelled()) return null;
+    }
+    return fresh;
+  }, [items, fetchWipDiff, target]);
+
   // Before calling the review complete, re-fetch every reviewed diff and drop marks that no longer
   // match. A result only counts for the marks it checked, so any change starts a fresh check.
   useEffect(() => {
     if (!allMarked || checked?.signature === signature) return;
     let cancelled = false;
-    void (async () => {
-      const fresh = new Map<string, string>();
-      for (let start = 0; start < items.length; start += REVIEW_VERIFY_CONCURRENCY) {
-        await Promise.all(
-          items.slice(start, start + REVIEW_VERIFY_CONCURRENCY).map(async (item) => {
-            try {
-              const result = await fetchWipDiff({ target, path: item.path, area: item.area });
-              fresh.set(item.key, fingerprint(result.text));
-            } catch {
-              // A diff that cannot be fetched cannot count as reviewed.
-            }
-          }),
-        );
-        if (cancelled) return;
-      }
+    void freshPrints(() => cancelled).then((fresh) => {
+      if (!fresh) return;
       const kept = keepUnchanged(reviewed, fresh);
       setChecked({ signature, unchanged: kept.size === reviewed.size });
       if (kept.size !== reviewed.size) onReviewedChange(kept);
-    })();
+    });
     return () => {
       cancelled = true;
     };
-  }, [allMarked, checked, signature, items, reviewed, fetchWipDiff, target, onReviewedChange]);
+  }, [allMarked, checked, signature, reviewed, freshPrints, onReviewedChange]);
+
+  const finished = allMarked && checked?.signature === signature && checked.unchanged;
+
+  // While "All reviewed" is on screen, keep checking in the background: a file that is not shown
+  // can be edited again without changing git status, and only the shown file's diff polls.
+  useEffect(() => {
+    if (!finished) return;
+    let cancelled = false;
+    const recheck = () => {
+      void freshPrints(() => cancelled).then((fresh) => {
+        if (!fresh) return;
+        const kept = keepUnchanged(reviewed, fresh);
+        if (kept.size !== reviewed.size) onReviewedChange(kept);
+      });
+    };
+    recheck();
+    const timer = setInterval(recheck, REVIEW_RECHECK_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [finished, worktreeToken, reviewed, freshPrints, onReviewedChange]);
 
   const markReviewed = () => {
     if (!current || currentPrint === null) return;
@@ -161,7 +197,6 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
     onReviewedChange(next);
   };
 
-  const finished = allMarked && checked?.signature === signature && checked.unchanged;
   const currentReviewed = current ? reviewed.has(current.key) : false;
 
   const topBar = (

@@ -3,7 +3,7 @@ import { stableHash } from "../shared/format";
 
 export const SPACING = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 export const FONT_SIZE = { small: 11, body: 13, title: 16 } as const;
-export const RADIUS = { chip: 4, card: 8 } as const;
+export const RADIUS = { chip: 4, card: 8, pill: 999 } as const;
 export const ICON_SIZE = 14;
 export const AUTHOR_COLUMN_WIDTH = 140;
 export const DATE_COLUMN_WIDTH = 120;
@@ -28,6 +28,9 @@ export const MINE_BAR_WIDTH = 3;
 /** Text drawn on a lane-colored fill; every LANE_PALETTE color is mid-tone, so white stays legible. */
 export const ON_LANE_TEXT = "#ffffff";
 export const MONO_FONT = "monospace";
+/** File cards: the size bar comparing how much each file changed. */
+export const SIZE_BAR_WIDTH = 48;
+export const SIZE_BAR_HEIGHT = 6;
 /** Diff viewer: width of one line-number column, the pane width that allows side by side, and tint strengths. */
 export const DIFF_GUTTER_WIDTH = 36;
 export const DIFF_SPLIT_MIN_WIDTH = 760;

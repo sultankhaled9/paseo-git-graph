@@ -10,14 +10,17 @@ import {
   explainArea,
   summarizeChanges,
 } from "../../shared/changes-text";
-import type { CommitSummary, Identity, RepoTarget, WipArea } from "../../shared/contracts";
+import type { CommitSummary, FileStat, Identity, RepoTarget, WipArea } from "../../shared/contracts";
+import { changeBadge, groupByFolder } from "../../shared/file-groups";
+import { pluralize } from "../../shared/format";
 import { describeWipChange, groupWorkInProgress } from "../../shared/status-text";
 import { useNow } from "../hooks/useNow";
-import { useRepoState, useSyncCommits, useWipDiff, type WipSelection } from "../hooks/useRepoQueries";
+import { useRepoState, useSyncCommits, useWipDiff, useWipStats, type WipSelection } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
 import { CommitDetail } from "./CommitDetail";
 import { CommitRow } from "./CommitRow";
 import { DiffPane, type ExpandControl } from "./DiffView";
+import { FileCard } from "./FileCard";
 import { StatusBar } from "./StatusBar";
 
 const LIST_FLEX = 3;
@@ -33,32 +36,89 @@ const AREA_ICONS: Readonly<Record<WipArea, string>> = {
   untracked: "FilePlus",
 };
 
-function Section({
+function SectionCard({
   icon,
   title,
+  count,
   explanation,
   theme,
   children,
 }: {
   icon: string;
   title: string;
+  count: number;
   explanation: string;
   theme: PluginTheme;
   children: ReactNode;
 }) {
   const { colors } = theme;
   return (
-    <View style={{ gap: SPACING.xs, paddingVertical: SPACING.sm }}>
+    <View
+      style={{
+        marginHorizontal: SPACING.md,
+        marginBottom: SPACING.md,
+        paddingVertical: SPACING.sm,
+        gap: SPACING.xs,
+        borderRadius: RADIUS.card,
+        borderWidth: DIVIDER_WIDTH,
+        borderColor: colors.border,
+        backgroundColor: colors.surface1,
+      }}
+    >
       <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, paddingHorizontal: SPACING.md }}>
         <Icon name={icon} size={ICON_SIZE} color={colors.foreground} />
-        <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "700" }}>{title}</Text>
+        <Text style={{ flexShrink: 1, color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "700" }}>{title}</Text>
+        <View style={{ paddingHorizontal: SPACING.sm, borderRadius: RADIUS.pill, backgroundColor: colors.surface2 }}>
+          <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.small, fontWeight: "600" }}>{count}</Text>
+        </View>
       </View>
       <Text style={{ paddingHorizontal: SPACING.md, color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
         {explanation}
       </Text>
-      <View>{children}</View>
+      <View style={{ gap: SPACING.xs }}>{children}</View>
     </View>
   );
+}
+
+function CountChip({ icon, label, theme }: { icon: string; label: string; theme: PluginTheme }) {
+  const { colors } = theme;
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: SPACING.xs,
+        paddingHorizontal: SPACING.sm,
+        paddingVertical: SPACING.xs,
+        borderRadius: RADIUS.pill,
+        backgroundColor: colors.surface2,
+      }}
+    >
+      <Icon name={icon} size={ICON_SIZE} color={colors.foreground} />
+      <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.small, fontWeight: "600" }}>{label}</Text>
+    </View>
+  );
+}
+
+function FolderLabel({ folder, theme }: { folder: string; theme: PluginTheme }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.xs, paddingHorizontal: SPACING.md, paddingTop: SPACING.xs }}>
+      <Icon name="Folder" size={ICON_SIZE} color={theme.colors.foregroundMuted} />
+      <Text numberOfLines={1} style={{ flexShrink: 1, color: theme.colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
+        {folder || "Top level"}
+      </Text>
+    </View>
+  );
+}
+
+function statsByPath(stats: readonly FileStat[] | undefined): ReadonlyMap<string, FileStat> {
+  return new Map((stats ?? []).map((stat) => [stat.path, stat]));
+}
+
+function largestChange(stats: Iterable<FileStat | undefined>): number {
+  let largest = 0;
+  for (const stat of stats) largest = Math.max(largest, (stat?.additions ?? 0) + (stat?.deletions ?? 0));
+  return largest;
 }
 
 interface CommitListProps {
@@ -154,6 +214,9 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const now = useNow();
   const { tokens, revision, status, identity } = useRepoState(target);
   const sync = useSyncCommits(target, tokens?.refsToken);
+  const wipStats = useWipStats(target, tokens?.worktreeToken);
+  const stagedStats = useMemo(() => statsByPath(wipStats.data?.staged), [wipStats.data?.staged]);
+  const unstagedStats = useMemo(() => statsByPath(wipStats.data?.unstaged), [wipStats.data?.unstaged]);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [width, setWidth] = useState<number | null>(null);
   const onLayout = useCallback((event: LayoutChangeEvent) => setWidth(Math.round(event.nativeEvent.layout.width)), []);
@@ -210,62 +273,82 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const toPull = describeToPull(syncData);
   const noRemote = describeNoRemote(syncData);
 
+  const filesChanged = repoStatus.files.length;
   const list = (
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: SPACING.xl }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: SPACING.md }}>
       <View
         style={{
-          margin: SPACING.md,
-          padding: SPACING.md,
+          marginHorizontal: SPACING.md,
+          marginBottom: SPACING.md,
+          padding: SPACING.lg,
+          gap: SPACING.md,
           borderRadius: RADIUS.card,
+          borderWidth: DIVIDER_WIDTH,
+          borderColor: colors.border,
           backgroundColor: colors.surface1,
         }}
       >
-        <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.title, fontWeight: "600" }}>
+        <Text style={{ color: colors.foreground, fontSize: FONT_SIZE.title, fontWeight: "700" }}>
           {summarizeChanges(repoStatus, syncData)}
         </Text>
-        {noRemote ? (
-          <Text style={{ marginTop: SPACING.xs, color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>{noRemote}</Text>
-        ) : null}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm }}>
+          {filesChanged > 0 ? (
+            <CountChip icon="FileDiff" label={pluralize(filesChanged, "file")} theme={theme} />
+          ) : null}
+          {syncData.toPush.length > 0 ? (
+            <CountChip icon="ArrowUp" label={`${syncData.toPush.length} to push`} theme={theme} />
+          ) : null}
+          {syncData.toPull.length > 0 ? (
+            <CountChip icon="ArrowDown" label={`${syncData.toPull.length} to pull`} theme={theme} />
+          ) : null}
+          {filesChanged + syncData.toPush.length + syncData.toPull.length === 0 ? (
+            <CountChip icon="CircleCheck" label="All clear" theme={theme} />
+          ) : null}
+        </View>
+        {noRemote ? <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>{noRemote}</Text> : null}
       </View>
 
-      {groups.map((group) => (
-        <Section
-          key={group.area}
-          icon={AREA_ICONS[group.area]}
-          title={`${group.title} (${group.files.length})`}
-          explanation={explainArea(group.area)}
-          theme={theme}
-        >
-          {group.files.map((file) => {
-            const entry = { path: file.path, area: group.area };
-            const selected =
-              selection?.kind === "file" && selection.file.path === file.path && selection.file.area === group.area;
-            return (
-              <Pressable
-                key={`${group.area}:${file.path}`}
-                accessibilityRole="button"
-                accessibilityLabel={`Show ${group.area} changes in ${file.path}`}
-                accessibilityState={{ selected }}
-                onPress={() => setSelection({ kind: "file", file: entry })}
-                style={{
-                  flexDirection: "row",
-                  gap: SPACING.sm,
-                  paddingHorizontal: SPACING.md,
-                  paddingVertical: SPACING.xs,
-                  backgroundColor: selected ? colors.surface2 : colors.surface0,
-                }}
-              >
-                <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: FONT_SIZE.small }}>
-                  {file.origPath ? `${file.origPath} -> ${file.path}` : file.path}
-                </Text>
-                <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
-                  {describeWipChange(file, group.area)}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </Section>
-      ))}
+      {groups.map((group) => {
+        const counts = group.area === "staged" ? stagedStats : group.area === "untracked" ? null : unstagedStats;
+        const sectionStats = group.files.map((file) => counts?.get(file.path));
+        const largest = largestChange(sectionStats);
+        return (
+          <SectionCard
+            key={group.area}
+            icon={AREA_ICONS[group.area]}
+            title={group.title}
+            count={group.files.length}
+            explanation={explainArea(group.area)}
+            theme={theme}
+          >
+            {groupByFolder(group.files, (file) => file.path).map((folderGroup) => (
+              <View key={folderGroup.folder} style={{ gap: SPACING.xs }}>
+                <FolderLabel folder={folderGroup.folder} theme={theme} />
+                {folderGroup.items.map((file) => {
+                  const selected =
+                    selection?.kind === "file" && selection.file.path === file.path && selection.file.area === group.area;
+                  const word = describeWipChange(file, group.area);
+                  return (
+                    <FileCard
+                      key={file.path}
+                      path={file.path}
+                      oldPath={file.origPath}
+                      badge={changeBadge(word)}
+                      stat={counts?.get(file.path)}
+                      largestChange={largest}
+                      selected={selected}
+                      compact={narrow}
+                      label={`Show ${group.area} changes in ${file.path}, ${word}`}
+                      theme={theme}
+                      onPress={() => setSelection({ kind: "file", file: { path: file.path, area: group.area } })}
+                    />
+                  );
+                })}
+              </View>
+            ))}
+          </SectionCard>
+        );
+      })}
       {repoStatus.filesTruncated ? (
         <Text style={{ paddingHorizontal: SPACING.md, color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
           Only the first {repoStatus.files.length} changed files are listed.
@@ -273,7 +356,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
       ) : null}
 
       {syncData.toPush.length > 0 ? (
-        <Section icon="ArrowUp" title={`${toPush.title} (${syncData.toPush.length})`} explanation={toPush.explanation} theme={theme}>
+        <SectionCard icon="ArrowUp" title={toPush.title} count={syncData.toPush.length} explanation={toPush.explanation} theme={theme}>
           <CommitList
             commits={syncData.toPush}
             truncated={syncData.toPushTruncated}
@@ -284,11 +367,11 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
             theme={theme}
             onSelect={selectCommit}
           />
-        </Section>
+        </SectionCard>
       ) : null}
 
       {syncData.toPull.length > 0 ? (
-        <Section icon="ArrowDown" title={`${toPull.title} (${syncData.toPull.length})`} explanation={toPull.explanation} theme={theme}>
+        <SectionCard icon="ArrowDown" title={toPull.title} count={syncData.toPull.length} explanation={toPull.explanation} theme={theme}>
           <CommitList
             commits={syncData.toPull}
             truncated={syncData.toPullTruncated}
@@ -299,7 +382,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
             theme={theme}
             onSelect={selectCommit}
           />
-        </Section>
+        </SectionCard>
       ) : null}
     </ScrollView>
   );

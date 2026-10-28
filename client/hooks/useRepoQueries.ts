@@ -16,6 +16,7 @@ import {
   syncCommitsRpc,
   type WipArea,
   wipDiffRpc,
+  wipStatsRpc,
 } from "../../shared/contracts";
 
 const NO_COMMITS: readonly CommitSummary[] = [];
@@ -167,6 +168,21 @@ export function useSyncCommits(target: RepoTarget, refsToken: string | undefined
     queryKey: ["git-graph", "sync", targetKey(target), refsToken],
     queryFn: () => fetchSync({ target }),
     enabled: refsToken !== undefined,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Line counts for uncommitted files. Keyed by the worktree token only, with no timer: unstaged
+ * numstat took 1.3-2.7 s on a large /mnt/c repository, too costly to poll. A re-edit of an
+ * already-changed file updates its count on the next status change; the open diff stays live.
+ */
+export function useWipStats(target: RepoTarget, worktreeToken: string | undefined) {
+  const fetchStats = useRpc(wipStatsRpc);
+  return useQuery({
+    queryKey: ["git-graph", "wip-stats", targetKey(target), worktreeToken],
+    queryFn: () => fetchStats({ target }),
+    enabled: worktreeToken !== undefined,
     placeholderData: keepPreviousData,
   });
 }

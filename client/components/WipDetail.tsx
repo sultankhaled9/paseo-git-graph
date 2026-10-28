@@ -6,13 +6,14 @@ import type { RepoStatus, RepoTarget } from "../../shared/contracts";
 import { describeWipChange, groupWorkInProgress } from "../../shared/status-text";
 import { useWipDiff, type WipSelection } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, RADIUS, SPACING } from "../tokens";
-import { DiffPane } from "./DiffView";
+import { DiffPane, type ExpandControl } from "./DiffView";
 
 interface WipDetailProps {
   target: RepoTarget;
   status: RepoStatus;
   worktreeToken: string | undefined;
   theme: PluginTheme;
+  expand?: ExpandControl;
   onClose?: () => void;
 }
 
@@ -21,7 +22,7 @@ function sameSelection(a: WipSelection | null, b: WipSelection): boolean {
 }
 
 /** Uncommitted changes grouped by area, with the selected file's diff. */
-export function WipDetail({ target, status, worktreeToken, theme, onClose }: WipDetailProps) {
+export function WipDetail({ target, status, worktreeToken, theme, expand, onClose }: WipDetailProps) {
   const { colors } = theme;
   const groups = useMemo(() => groupWorkInProgress(status.files), [status.files]);
   const [selection, setSelection] = useState<WipSelection | null>(null);
@@ -96,6 +97,7 @@ export function WipDetail({ target, status, worktreeToken, theme, onClose }: Wip
 
   return (
     <DiffPane
+      expand={expand}
       header={header}
       text={activeSelection ? diff.data?.text : undefined}
       truncated={diff.data?.truncated ?? false}

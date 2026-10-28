@@ -82,7 +82,12 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
     setWidth(Math.round(event.nativeEvent.layout.width));
   }, []);
   const narrow = compact || (width !== null && width < NARROW_LAYOUT_WIDTH);
-  const closeDetail = useCallback(() => setSelectedHash(null), []);
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = useCallback(() => setExpanded((value) => !value), []);
+  const closeDetail = useCallback(() => {
+    setSelectedHash(null);
+    setExpanded(false);
+  }, []);
   const onModalOpenChange = useCallback((open: boolean) => {
     if (!open) setSelectedHash(null);
   }, []);
@@ -279,6 +284,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         status={status}
         worktreeToken={repo.worktreeToken}
         theme={theme}
+        expand={narrow ? undefined : { expanded, onToggle: toggleExpanded }}
         onClose={narrow ? undefined : closeDetail}
       />
     );
@@ -290,6 +296,7 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         hash={activeSelection}
         theme={theme}
         identity={repo.identity}
+        expand={narrow ? undefined : { expanded, onToggle: toggleExpanded }}
         onSelectCommit={setSelectedHash}
         onClose={narrow ? undefined : closeDetail}
       />
@@ -344,7 +351,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
         </>
       ) : (
         <View style={{ flex: 1, flexDirection: "row" }}>
-          <View style={{ flex: LIST_FLEX }}>{body}</View>
+          {/* Hidden rather than unmounted while the diff is expanded, so the list keeps its scroll position. */}
+          <View style={{ flex: LIST_FLEX, display: expanded && detail ? "none" : "flex" }}>{body}</View>
           {detail ? (
             <View style={{ flex: DETAIL_FLEX, borderLeftWidth: DIVIDER_WIDTH, borderLeftColor: colors.border }}>
               {detail}

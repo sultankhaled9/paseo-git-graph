@@ -28,6 +28,11 @@ export const MINE_BAR_WIDTH = 3;
 /** Text drawn on a lane-colored fill; every LANE_PALETTE color is mid-tone, so white stays legible. */
 export const ON_LANE_TEXT = "#ffffff";
 export const MONO_FONT = "monospace";
+/** Diff viewer: width of one line-number column, the pane width that allows side by side, and tint strengths. */
+export const DIFF_GUTTER_WIDTH = 36;
+export const DIFF_SPLIT_MIN_WIDTH = 760;
+export const DIFF_LINE_TINT = 0.14;
+export const DIFF_WORD_TINT = 0.4;
 /** Below this width the graph drops metadata columns and shows commit detail in a modal. */
 export const NARROW_LAYOUT_WIDTH = 720;
 /** Opacity of commits that do not match the search, so the graph stays readable around matches. */

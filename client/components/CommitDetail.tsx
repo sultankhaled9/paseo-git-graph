@@ -13,13 +13,14 @@ import type {
 import { formatDate, shortHash } from "../../shared/format";
 import { useCommitDetail, useFileDiff } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, MONO_FONT, RADIUS, SPACING } from "../tokens";
-import { DiffPane } from "./DiffView";
+import { DiffPane, type ExpandControl } from "./DiffView";
 
 interface CommitDetailProps {
   target: RepoTarget;
   hash: string;
   theme: PluginTheme;
   identity: Identity | undefined;
+  expand?: ExpandControl;
   onSelectCommit(hash: string): void;
   onClose?: () => void;
 }
@@ -174,7 +175,7 @@ function Header({
 }
 
 /** Commit metadata, changed files, and the selected file's diff. */
-export function CommitDetail({ target, hash, theme, identity, onSelectCommit, onClose }: CommitDetailProps) {
+export function CommitDetail({ target, hash, theme, identity, expand, onSelectCommit, onClose }: CommitDetailProps) {
   const { colors } = theme;
   const toast = useToast();
   const detail = useCommitDetail(target, hash);
@@ -197,6 +198,7 @@ export function CommitDetail({ target, hash, theme, identity, onSelectCommit, on
 
   return (
     <DiffPane
+      expand={expand}
       header={
         <Header
           detail={detail.data}

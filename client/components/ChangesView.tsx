@@ -17,7 +17,7 @@ import { useRepoState, useSyncCommits, useWipDiff, type WipSelection } from "../
 import { FONT_SIZE, ICON_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
 import { CommitDetail } from "./CommitDetail";
 import { CommitRow } from "./CommitRow";
-import { DiffPane } from "./DiffView";
+import { DiffPane, type ExpandControl } from "./DiffView";
 import { StatusBar } from "./StatusBar";
 
 const LIST_FLEX = 3;
@@ -103,12 +103,14 @@ function WipFileDiff({
   file,
   worktreeToken,
   theme,
+  expand,
   onClose,
 }: {
   target: RepoTarget;
   file: WipSelection;
   worktreeToken: string | undefined;
   theme: PluginTheme;
+  expand?: ExpandControl;
   onClose?: () => void;
 }) {
   const { colors } = theme;
@@ -132,6 +134,7 @@ function WipFileDiff({
   );
   return (
     <DiffPane
+      expand={expand}
       header={header}
       text={diff.data?.text}
       truncated={diff.data?.truncated ?? false}
@@ -156,7 +159,12 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const onLayout = useCallback((event: LayoutChangeEvent) => setWidth(Math.round(event.nativeEvent.layout.width)), []);
   const narrow = compact || (width !== null && width < NARROW_LAYOUT_WIDTH);
   const condensed = narrow || selection !== null;
-  const close = useCallback(() => setSelection(null), []);
+  const [expanded, setExpanded] = useState(false);
+  const toggleExpanded = useCallback(() => setExpanded((value) => !value), []);
+  const close = useCallback(() => {
+    setSelection(null);
+    setExpanded(false);
+  }, []);
   const selectCommit = useCallback((hash: string) => setSelection({ kind: "commit", hash }), []);
   const groups = useMemo(() => groupWorkInProgress(status.data?.files ?? []), [status.data?.files]);
 
@@ -305,6 +313,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
         file={selection.file}
         worktreeToken={tokens?.worktreeToken}
         theme={theme}
+        expand={narrow ? undefined : { expanded, onToggle: toggleExpanded }}
         onClose={narrow ? undefined : close}
       />
     );
@@ -316,6 +325,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
         hash={selection.hash}
         theme={theme}
         identity={identity.data}
+        expand={narrow ? undefined : { expanded, onToggle: toggleExpanded }}
         onSelectCommit={selectCommit}
         onClose={narrow ? undefined : close}
       />
@@ -342,7 +352,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
         </>
       ) : (
         <View style={{ flex: 1, flexDirection: "row" }}>
-          <View style={{ flex: LIST_FLEX }}>{list}</View>
+          <View style={{ flex: LIST_FLEX, display: expanded && detail ? "none" : "flex" }}>{list}</View>
           {detail ? (
             <View style={{ flex: DETAIL_FLEX, borderLeftWidth: DIVIDER_WIDTH, borderLeftColor: colors.border }}>{detail}</View>
           ) : null}

@@ -212,7 +212,7 @@ function takeRun(rows: readonly DiffRow[], start: number, kind: "add" | "del"): 
   return run;
 }
 
-function isLineRow(row: DiffRow): row is LineRow {
+export function isLineRow(row: DiffRow): row is LineRow {
   return row.kind === "add" || row.kind === "del" || row.kind === "context";
 }
 

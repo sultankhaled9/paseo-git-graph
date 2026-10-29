@@ -183,6 +183,26 @@ describe("discard all", () => {
     });
   });
 
+  it("refuses discard all while a rebase is stopped, and allows it once only a stale REBASE_HEAD is left", async () => {
+    await writeFile(join(repo, "a.txt"), "second\n");
+    git("commit", "-qam", "second");
+    execFileSync("git", ["rebase", "-q", "-i", "HEAD~1"], {
+      cwd: repo,
+      env: { ...GIT_ENV, GIT_SEQUENCE_EDITOR: "sed -i 1s/^pick/edit/" },
+    });
+    await writeFile(join(repo, "a.txt"), "edited mid-rebase\n");
+    expect(await previewChange(repo, { kind: "discard-all" })).toEqual({
+      allowed: false,
+      reason: "A merge, rebase, or cherry-pick is in progress. Finish or abort it first.",
+    });
+
+    git("rebase", "--abort");
+    // git can leave REBASE_HEAD behind after a rebase ends; it does not mean a rebase is running.
+    await writeFile(join(repo, ".git", "REBASE_HEAD"), `${git("rev-parse", "HEAD")}\n`);
+    await writeFile(join(repo, "a.txt"), "edited later\n");
+    expect(await previewChange(repo, { kind: "discard-all" })).toMatchObject({ allowed: true, paths: ["a.txt"] });
+  });
+
   it("says when there is nothing to discard", async () => {
     expect(await previewChange(repo, { kind: "discard-all" })).toEqual({ allowed: false, reason: "There is nothing to discard." });
   });

@@ -8,15 +8,11 @@ import { runGit, runGitOptional } from "./git";
 import { parseStatus } from "./parse";
 import { STATUS_ARGS } from "./repo";
 
-/** Files git keeps while a merge, rebase, cherry-pick, or revert is in progress. */
-const IN_PROGRESS_MARKERS: readonly string[] = [
-  "MERGE_HEAD",
-  "CHERRY_PICK_HEAD",
-  "REVERT_HEAD",
-  "REBASE_HEAD",
-  "rebase-merge",
-  "rebase-apply",
-];
+/**
+ * Files git keeps while a merge, rebase, cherry-pick, or revert is in progress. REBASE_HEAD is not
+ * one: git can leave it behind after a rebase ends, and like git status, only the rebase folders count.
+ */
+const IN_PROGRESS_MARKERS: readonly string[] = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"];
 
 const repositoryLocks = new Map<string, Promise<unknown>>();
 

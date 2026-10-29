@@ -187,3 +187,17 @@ describe("discard all", () => {
     expect(await previewChange(repo, { kind: "discard-all" })).toEqual({ allowed: false, reason: "There is nothing to discard." });
   });
 });
+
+describe("backups stay out of history", () => {
+  it("are not drawn in the graph and do not change the refs token", async () => {
+    const { getLog, getRevision } = await import("../server/repo");
+    await writeFile(join(repo, "a.txt"), "edited\n");
+    const before = await getRevision(repo);
+    const commitsBefore = (await getLog(repo, 50, "all")).commits.length;
+    await apply({ kind: "discard", path: "a.txt", area: "unstaged" });
+    const after = await getRevision(repo);
+    expect(after.refsToken).toBe(before.refsToken);
+    expect((await getLog(repo, 50, "all")).commits).toHaveLength(commitsBefore);
+    expect(git("for-each-ref", "--format=%(refname)", "refs/git-graph/backups/")).toMatch(/^refs\/git-graph\/backups\/\d{13}-[0-9a-f]{8}$/);
+  });
+});

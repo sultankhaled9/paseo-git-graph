@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { DIFF_MAX_BYTES, SYNC_COMMITS_LIMIT } from "../shared/constants";
+import { BACKUP_REF_PREFIX, DIFF_MAX_BYTES, SYNC_COMMITS_LIMIT } from "../shared/constants";
 import { fileInArea } from "../shared/status-text";
 import type {
   CommitDetail,
@@ -50,7 +50,8 @@ export async function getStatus(root: string): Promise<RepoStatus> {
 }
 
 // Stash refs point at internal index and untracked commits that are noise in a history graph.
-const ALL_BRANCHES: readonly string[] = ["--exclude=refs/stash", "--all"];
+// The plugin's own backup refs are private recovery data, not history.
+const ALL_BRANCHES: readonly string[] = ["--exclude=refs/stash", `--exclude=${BACKUP_REF_PREFIX}*`, "--all"];
 
 export async function getLog(
   root: string,
@@ -125,8 +126,13 @@ export async function getRevision(
     runGit(root, STATUS_ARGS),
     readIdentityConfig(root),
   ]);
+  // Backup refs are left out so taking a backup does not look like a history change.
+  const historyRefs = refs
+    .split("\n")
+    .filter((line) => !(line.split(" ")[1] ?? "").startsWith(BACKUP_REF_PREFIX))
+    .join("\n");
   // Identity rides on the worktree token so a changed user.email refetches the identity query.
-  return { refsToken: sha1(refs, symbolicHead, headOid), worktreeToken: sha1(status, identity) };
+  return { refsToken: sha1(historyRefs, symbolicHead, headOid), worktreeToken: sha1(status, identity) };
 }
 
 const DIFF_SAFETY_FLAGS: readonly string[] = ["--no-color", "--no-ext-diff", "--no-textconv"];

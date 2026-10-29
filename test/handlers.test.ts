@@ -63,6 +63,17 @@ describe("repo handlers", () => {
     expect(repos.map((entry) => entry.relativePath)).toContain(basename(repo));
   });
 
+  it("preview, apply, list, and restore a change through the handlers", async () => {
+    const target = { kind: "project", projectId: "p" } as const;
+    await writeFile(join(repo, "a.txt"), "handler edit\n");
+    const action = { kind: "discard", path: "a.txt", area: "unstaged" } as const;
+    const preview = await handlers.previewChange({ target, action }, lookup({}));
+    if (!preview.allowed) throw new Error(preview.reason);
+    const { backupId } = await handlers.applyChange({ target, action, fingerprint: preview.fingerprint }, lookup({}));
+    expect((await handlers.backups({ target }, lookup({}))).backups[0]?.id).toBe(backupId);
+    expect((await handlers.restoreBackup({ target, backupId }, lookup({}))).restoredPaths).toEqual(["a.txt"]);
+  });
+
   it("reject workspaces without a directory", async () => {
     const paseo = lookup({ w: { projectKind: "git" } });
     await expect(

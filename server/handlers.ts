@@ -11,8 +11,14 @@ import type {
   statusRpc,
   syncCommitsRpc,
   wipStatsRpc,
+  previewChangeRpc,
+  applyChangeRpc,
+  listBackupsRpc,
+  restoreBackupRpc,
   wipDiffRpc,
 } from "../shared/contracts";
+import { listBackups } from "./backup";
+import { applyChange, previewChange, restoreChange } from "./change";
 import {
   listFolderRepos,
   listWorkspaceRepos,
@@ -62,6 +68,30 @@ export function createRepoHandlers(readSettings: ReadSettings) {
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof workspaceReposRpc>> {
       return listWorkspaceRepos(workspaceId, guardDeps(paseo));
+    },
+    async previewChange(
+      { target, action }: RpcInput<typeof previewChangeRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof previewChangeRpc>> {
+      return previewChange(await resolve(target, paseo), action);
+    },
+    async applyChange(
+      { target, action, fingerprint }: RpcInput<typeof applyChangeRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof applyChangeRpc>> {
+      return { backupId: await applyChange(await resolve(target, paseo), action, fingerprint) };
+    },
+    async backups(
+      { target }: RpcInput<typeof listBackupsRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof listBackupsRpc>> {
+      return { backups: await listBackups(await resolve(target, paseo)) };
+    },
+    async restoreBackup(
+      { target, backupId }: RpcInput<typeof restoreBackupRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof restoreBackupRpc>> {
+      return { restoredPaths: await restoreChange(await resolve(target, paseo), backupId) };
     },
     async wipStats(
       { target }: RpcInput<typeof wipStatsRpc>,

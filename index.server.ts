@@ -17,6 +17,9 @@ import {
   applyChangeRpc,
   listBackupsRpc,
   restoreBackupRpc,
+  listBranchesRpc,
+  previewSwitchRpc,
+  switchBranchRpc,
   wipDiffRpc,
   workspaceReposRpc,
 } from "./shared/contracts";
@@ -40,6 +43,9 @@ export default function contribute(server: PluginServerContext) {
   server.handle(applyChangeRpc, (input, { paseo }) => repo.applyChange(input, paseo));
   server.handle(listBackupsRpc, (input, { paseo }) => repo.backups(input, paseo));
   server.handle(restoreBackupRpc, (input, { paseo }) => repo.restoreBackup(input, paseo));
+  server.handle(listBranchesRpc, (input, { paseo }) => repo.branches(input, paseo));
+  server.handle(previewSwitchRpc, (input, { paseo }) => repo.previewSwitch(input, paseo));
+  server.handle(switchBranchRpc, (input, { paseo }) => repo.switchBranch(input, paseo));
   server.handle(logRpc, (input, { paseo }) => repo.log(input, paseo));
   server.handle(commitRpc, (input, { paseo }) => repo.commit(input, paseo));
   server.handle(diffRpc, (input, { paseo }) => repo.diff(input, paseo));

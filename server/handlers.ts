@@ -15,9 +15,13 @@ import type {
   applyChangeRpc,
   listBackupsRpc,
   restoreBackupRpc,
+  listBranchesRpc,
+  previewSwitchRpc,
+  switchBranchRpc,
   wipDiffRpc,
 } from "../shared/contracts";
 import { listBackups } from "./backup";
+import { listBranches, previewSwitch, switchBranch } from "./branch";
 import { applyChange, previewChange, restoreChange } from "./change";
 import {
   listFolderRepos,
@@ -92,6 +96,24 @@ export function createRepoHandlers(readSettings: ReadSettings) {
       paseo: WorkspaceLookup,
     ): Promise<RpcOutput<typeof restoreBackupRpc>> {
       return { restoredPaths: await restoreChange(await resolve(target, paseo), backupId) };
+    },
+    async branches(
+      { target }: RpcInput<typeof listBranchesRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof listBranchesRpc>> {
+      return listBranches(await resolve(target, paseo));
+    },
+    async previewSwitch(
+      { target, ref }: RpcInput<typeof previewSwitchRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof previewSwitchRpc>> {
+      return previewSwitch(await resolve(target, paseo), ref);
+    },
+    async switchBranch(
+      { target, ref, fingerprint }: RpcInput<typeof switchBranchRpc>,
+      paseo: WorkspaceLookup,
+    ): Promise<RpcOutput<typeof switchBranchRpc>> {
+      return switchBranch(await resolve(target, paseo), ref, fingerprint);
     },
     async wipStats(
       { target }: RpcInput<typeof wipStatsRpc>,

@@ -74,6 +74,20 @@ describe("repo handlers", () => {
     expect((await handlers.restoreBackup({ target, backupId }, lookup({}))).restoredPaths).toEqual(["a.txt"]);
   });
 
+  it("lists branches, previews, and switches through the handlers", async () => {
+    const target = { kind: "project", projectId: "p" } as const;
+    execFileSync("git", ["branch", "other"], { cwd: repo, env: GIT_ENV });
+    const { local } = await handlers.branches({ target }, lookup({}));
+    expect(local.map((branch) => branch.name).sort()).toEqual(["main", "other"]);
+    const preview = await handlers.previewSwitch({ target, ref: "refs/heads/other" }, lookup({}));
+    if (!preview.allowed) throw new Error(preview.reason);
+    expect(await handlers.switchBranch({ target, ref: "refs/heads/other", fingerprint: preview.fingerprint }, lookup({}))).toEqual({
+      branch: "other",
+      previous: "refs/heads/main",
+    });
+    execFileSync("git", ["switch", "-q", "main"], { cwd: repo, env: GIT_ENV });
+  });
+
   it("reject workspaces without a directory", async () => {
     const paseo = lookup({ w: { projectKind: "git" } });
     await expect(

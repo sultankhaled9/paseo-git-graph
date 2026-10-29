@@ -11,9 +11,10 @@ import {
   type RepoTarget,
   restoreBackupRpc,
 } from "../../shared/contracts";
+import { rpcErrorMessage } from "../../shared/rpc-error";
 import { targetKey } from "./useRepoQueries";
 
-const QUERY_ROOT = "git-graph";
+export const QUERY_ROOT = "git-graph";
 const TARGET_KEY_INDEX = 2;
 
 export interface PendingChange {
@@ -29,10 +30,6 @@ export interface DoneChange {
   backupId: string;
   undoing: boolean;
   error: string | null;
-}
-
-function message(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
 }
 
 /** Refetches everything shown for one repository after it was changed. */
@@ -66,7 +63,7 @@ export function useChangeFlow(target: RepoTarget) {
       preview({ target, action }).then(
         (result) => setPending((current) => (current?.action === action ? { ...current, preview: result, busy: false } : current)),
         (error: unknown) =>
-          setPending((current) => (current?.action === action ? { ...current, busy: false, error: message(error, "Could not check the files") } : current)),
+          setPending((current) => (current?.action === action ? { ...current, busy: false, error: rpcErrorMessage(error, "Could not check the files") } : current)),
       );
     },
     [preview, target],
@@ -83,7 +80,7 @@ export function useChangeFlow(target: RepoTarget) {
       setPending(null);
       setDone({ text: describeAction(action, fileCount).done, backupId, undoing: false, error: null });
     } catch (error) {
-      setPending({ ...pending, busy: false, error: message(error, "The change failed") });
+      setPending({ ...pending, busy: false, error: rpcErrorMessage(error, "The change failed") });
     } finally {
       await refresh();
     }
@@ -96,7 +93,7 @@ export function useChangeFlow(target: RepoTarget) {
       await restore({ target, backupId: done.backupId });
       setDone(null);
     } catch (error) {
-      setDone({ ...done, undoing: false, error: message(error, "Undo failed") });
+      setDone({ ...done, undoing: false, error: rpcErrorMessage(error, "Undo failed") });
     } finally {
       await refresh();
     }

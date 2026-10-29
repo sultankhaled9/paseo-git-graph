@@ -37,7 +37,7 @@ import { ColumnHeader } from "./ColumnHeader";
 import { CommitDetail } from "./CommitDetail";
 import { Legend } from "./Legend";
 import { CommitRow, type CommitRowGraph } from "./CommitRow";
-import { StatusBar } from "./StatusBar";
+import { BranchStatusBar } from "./BranchSwitcher";
 import { WipDetail } from "./WipDetail";
 import { SearchBar } from "./SearchBar";
 import { hasWorkInProgress, WipRow } from "./WipRow";
@@ -306,7 +306,8 @@ export function GraphView({ target, theme, compact }: GraphViewProps) {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
       {status ? (
-        <StatusBar
+        <BranchStatusBar
+          target={target}
           status={status}
           theme={theme}
           actions={

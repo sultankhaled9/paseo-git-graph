@@ -6,6 +6,7 @@ import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { actionsFor, describeAction, type FileActionKind, fileAction } from "../../shared/change-actions";
 import { type RepoTarget, restoreBackupRpc, type WipArea } from "../../shared/contracts";
 import { formatRelative, pluralize } from "../../shared/format";
+import { rpcErrorMessage } from "../../shared/rpc-error";
 import { type ChangeFlow, useBackups, useRefreshRepository } from "../hooks/useChangeFlow";
 import { FONT_SIZE, ICON_SIZE, ON_LANE_TEXT, RADIUS, SPACING } from "../tokens";
 
@@ -249,7 +250,7 @@ export function BackupsCard({
       setResult({ text: `Restored ${pluralize(restoredPaths.length, "file")}`, failed: false });
       onRestored(id);
     } catch (error) {
-      setResult({ text: error instanceof Error ? error.message : "Restore failed", failed: true });
+      setResult({ text: rpcErrorMessage(error, "Restore failed"), failed: true });
     } finally {
       setBusyId(null);
       await refresh();

@@ -25,7 +25,7 @@ import { CommitRow } from "./CommitRow";
 import { DiffPane, type ExpandControl } from "./DiffView";
 import { FileCard } from "./FileCard";
 import { ReviewMode } from "./ReviewMode";
-import { StatusBar } from "./StatusBar";
+import { BranchStatusBar } from "./BranchSwitcher";
 
 const LIST_FLEX = 3;
 const DETAIL_FLEX = 2;
@@ -487,7 +487,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   if (reviewing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
-        <StatusBar status={repoStatus} theme={theme} />
+        <BranchStatusBar target={target} status={repoStatus} theme={theme} />
         <ReviewMode
           target={target}
           status={repoStatus}
@@ -511,7 +511,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface0 }} onLayout={onLayout}>
-      <StatusBar status={repoStatus} theme={theme} />
+      <BranchStatusBar target={target} status={repoStatus} theme={theme} />
       {narrow ? (
         <>
           {list}

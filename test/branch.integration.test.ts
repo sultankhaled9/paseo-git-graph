@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { describeSwitchRefusal, listBranches, localNameFor, previewSwitch, switchBranch } from "../server/branch";
+import { MAX_LISTED_BRANCHES } from "../shared/constants";
 
 const GIT_ENV = {
   ...process.env,
@@ -83,6 +84,28 @@ describe("listBranches", () => {
     git("commit", "-qam", "fix | pipes, tabs\tand ünïcödé");
     const { local } = await listBranches(repo);
     expect(local.find((branch) => branch.current)?.subject).toBe("fix | pipes, tabs\tand ünïcödé");
+  });
+
+  it("always lists every local branch, capping only remote branches, and still switches to one past the cap", async () => {
+    // A commit newer than every local branch, so remote refs to it sort first and fill the cap.
+    const newer = execFileSync("git", ["commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "newer"], {
+      cwd: repo,
+      env: { ...GIT_ENV, GIT_COMMITTER_DATE: "2030-01-01T00:00:00+0000" },
+      encoding: "utf8",
+    }).trim();
+    const bulk = Array.from({ length: MAX_LISTED_BRANCHES + 1 }, (_, index) => `bulk-${String(index).padStart(5, "0")}`);
+    execFileSync("git", ["update-ref", "--stdin"], {
+      cwd: repo,
+      env: GIT_ENV,
+      input: bulk.map((name) => `create refs/remotes/origin/${name} ${newer}\n`).join(""),
+    });
+    const list = await listBranches(repo);
+    expect(list.truncated).toBe(true);
+    expect(list.local.map((branch) => branch.name).sort()).toEqual(["feature", "main", "taken"]);
+    expect(list.remote).toHaveLength(MAX_LISTED_BRANCHES);
+    const listed = new Set(list.remote.map((branch) => branch.name));
+    const pastCap = bulk.find((name) => !listed.has(`origin/${name}`)) ?? "";
+    expect(await previewSwitch(repo, `refs/remotes/origin/${pastCap}`)).toMatchObject({ allowed: true, branch: pastCap, tracks: `origin/${pastCap}` });
   });
 
   it("derives the local name a tracking branch gets", () => {

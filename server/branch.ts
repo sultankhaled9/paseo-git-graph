@@ -59,29 +59,18 @@ export function localNameFor(remoteName: string): string {
   return slash < 0 ? remoteName : remoteName.slice(slash + 1);
 }
 
-/**
- * Local branches, then remote branches that no local branch tracks yet, newest commit first, from
- * one git call. A remote whose local name is already used by another branch is marked, not hidden.
- */
-export async function listBranches(root: string): Promise<BranchList> {
-  const stdout = await runGit(root, [
-    "for-each-ref",
-    "--sort=-committerdate",
-    `--count=${MAX_LISTED_BRANCHES + 1}`,
-    `--format=${BRANCH_FORMAT}%1e`,
-    LOCAL_BRANCH_PREFIX,
-    REMOTE_BRANCH_PREFIX,
-  ]);
-  const all = parseRecords(stdout);
-  const truncated = all.length > MAX_LISTED_BRANCHES;
-  const records = all.slice(0, MAX_LISTED_BRANCHES);
-  const here = resolve(root);
+async function readRefs(root: string, pattern: string, count?: number): Promise<RefRecord[]> {
+  const args = ["for-each-ref", "--sort=-committerdate", ...(count ? [`--count=${count}`] : []), `--format=${BRANCH_FORMAT}%1e`, pattern];
+  return parseRecords(await runGit(root, args));
+}
 
+/** Sorts records into local branches and remote branches that no local branch tracks yet. */
+function classify(root: string, locals: readonly RefRecord[], remotes: readonly RefRecord[]): Omit<BranchList, "truncated"> {
+  const here = resolve(root);
   const local: LocalBranch[] = [];
   const tracked = new Set<string>();
   const localNames = new Set<string>();
-  for (const record of records) {
-    if (!record.ref.startsWith(LOCAL_BRANCH_PREFIX)) continue;
+  for (const record of locals) {
     const name = record.ref.slice(LOCAL_BRANCH_PREFIX.length);
     if (record.upstream) tracked.add(record.upstream);
     localNames.add(name);
@@ -95,16 +84,38 @@ export async function listBranches(root: string): Promise<BranchList> {
       date: record.date,
     });
   }
-
   const remote: RemoteBranch[] = [];
-  for (const record of records) {
-    if (!record.ref.startsWith(REMOTE_BRANCH_PREFIX) || record.symref || record.ref.endsWith(REMOTE_HEAD_SUFFIX)) continue;
-    if (tracked.has(record.ref)) continue;
+  for (const record of remotes) {
+    if (record.symref || record.ref.endsWith(REMOTE_HEAD_SUFFIX) || tracked.has(record.ref)) continue;
     const name = record.ref.slice(REMOTE_BRANCH_PREFIX.length);
     const localName = localNameFor(name);
     remote.push({ ref: record.ref, name, localName, nameTaken: localNames.has(localName), subject: record.subject, date: record.date });
   }
-  return { local, remote, truncated };
+  return { local, remote };
+}
+
+/**
+ * Every local branch, then up to MAX_LISTED_BRANCHES remote branches that no local branch tracks yet,
+ * newest commit first. Local branches are never cut off: the current branch, Switch back, and the
+ * "already tracked" and "name taken" checks all depend on the full set. A remote whose local name is
+ * already used by another branch is marked, not hidden.
+ */
+export async function listBranches(root: string): Promise<BranchList> {
+  const [locals, remotes] = await Promise.all([
+    readRefs(root, LOCAL_BRANCH_PREFIX),
+    readRefs(root, REMOTE_BRANCH_PREFIX, MAX_LISTED_BRANCHES + 1),
+  ]);
+  return { ...classify(root, locals, remotes.slice(0, MAX_LISTED_BRANCHES)), truncated: remotes.length > MAX_LISTED_BRANCHES };
+}
+
+/** The branches a switch to `ref` is checked against: all local ones, and `ref` itself if it is remote. */
+async function branchesFor(root: string, ref: string): Promise<Omit<BranchList, "truncated">> {
+  const [locals, remotes] = await Promise.all([
+    readRefs(root, LOCAL_BRANCH_PREFIX),
+    ref.startsWith(REMOTE_BRANCH_PREFIX) ? readRefs(root, ref) : Promise.resolve([]),
+  ]);
+  // for-each-ref also matches refs below `ref`, so keep the exact one only.
+  return classify(root, locals, remotes.filter((record) => record.ref === ref));
 }
 
 /**
@@ -165,7 +176,7 @@ async function planSwitch(root: string, ref: string): Promise<SwitchPlan | { rea
   const rawStatus = await runGit(root, STATUS_ARGS);
   const status = parseStatus(rawStatus, root, Number.POSITIVE_INFINITY);
   if (status.conflicted > 0) return { reason: "Some files have merge conflicts. Resolve them before switching." };
-  const list = await listBranches(root);
+  const list = await branchesFor(root, ref);
   const local = list.local.find((branch) => branch.ref === ref);
   const remote = list.remote.find((branch) => branch.ref === ref);
   let branch: string;

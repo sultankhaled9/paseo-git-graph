@@ -172,6 +172,8 @@ export function runGitRaw(cwd: string, args: readonly string[], options: RawGitO
       }
       resolve(Buffer.concat(chunks));
     });
+    // git may exit without reading all of its input; the exit code decides the result, not the pipe.
+    child.stdin.on("error", () => undefined);
     child.stdin.end(options.input ?? "");
   });
 }

@@ -15,9 +15,11 @@ import { changeBadge, groupByFolder } from "../../shared/file-groups";
 import type { ReviewedFiles } from "../../shared/review";
 import { pluralize } from "../../shared/format";
 import { describeWipChange, groupWorkInProgress } from "../../shared/status-text";
+import { type ChangeFlow, useChangeFlow } from "../hooks/useChangeFlow";
 import { useNow } from "../hooks/useNow";
 import { useRepoState, useSyncCommits, useWipDiff, useWipStats, type WipSelection } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, NARROW_LAYOUT_WIDTH, RADIUS, SPACING } from "../tokens";
+import { ActionButton, BackupsCard, ChangeConfirmModal, FileActions, UndoBanner } from "./ChangeControls";
 import { CommitDetail } from "./CommitDetail";
 import { CommitRow } from "./CommitRow";
 import { DiffPane, type ExpandControl } from "./DiffView";
@@ -165,6 +167,7 @@ function WipFileDiff({
   file,
   worktreeToken,
   theme,
+  flow,
   expand,
   onClose,
 }: {
@@ -172,16 +175,18 @@ function WipFileDiff({
   file: WipSelection;
   worktreeToken: string | undefined;
   theme: PluginTheme;
+  flow: ChangeFlow;
   expand?: ExpandControl;
   onClose?: () => void;
 }) {
   const { colors } = theme;
   const diff = useWipDiff(target, file, worktreeToken);
   const header = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: SPACING.sm, padding: SPACING.md }}>
-      <Text numberOfLines={1} style={{ flex: 1, color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "600" }}>
+    <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: SPACING.sm, padding: SPACING.md }}>
+      <Text numberOfLines={1} style={{ flex: 1, minWidth: 0, color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "600" }}>
         {file.path}
       </Text>
+      <FileActions path={file.path} area={file.area} flow={flow} theme={theme} />
       {onClose ? (
         <Pressable
           accessibilityRole="button"
@@ -209,7 +214,8 @@ function WipFileDiff({
 
 /**
  * Everything that exists only on this machine or only on the server, in plain words: uncommitted
- * files by kind, commits not pushed yet, and commits to pull. Read-only; it explains next steps.
+ * files by kind, commits not pushed yet, and commits to pull. It explains next steps, and can discard
+ * uncommitted changes after a confirmation, keeping a backup for Undo.
  */
 export function ChangesView({ target, theme, compact }: { target: RepoTarget; theme: PluginTheme; compact: boolean }) {
   const { colors } = theme;
@@ -239,6 +245,14 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   }, []);
   const selectCommit = useCallback((hash: string) => setSelection({ kind: "commit", hash }), []);
   const groups = useMemo(() => groupWorkInProgress(status.data?.files ?? []), [status.data?.files]);
+  const flow = useChangeFlow(target);
+  const { done, dismiss } = flow;
+  const forgetRestored = useCallback(
+    (backupId: string) => {
+      if (done?.backupId === backupId) dismiss();
+    },
+    [done?.backupId, dismiss],
+  );
 
   // Any failed request that leaves required data missing must surface, not spin forever.
   const error = revision.error ?? status.error ?? sync.error;
@@ -283,6 +297,11 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
   const noRemote = describeNoRemote(syncData);
 
   const filesChanged = repoStatus.files.length;
+  // A file whose change was discarded or committed has nothing left to show.
+  const selectedFile = selection?.kind === "file" ? selection.file : null;
+  const selectionGone =
+    selectedFile !== null &&
+    !groups.some((group) => group.area === selectedFile.area && group.files.some((file) => file.path === selectedFile.path));
   const list = (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingVertical: SPACING.md }}>
       <View
@@ -316,28 +335,41 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
         </View>
         {noRemote ? <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>{noRemote}</Text> : null}
         {filesChanged > 0 ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Review changes file by file"
-            onPress={startReview}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              alignSelf: "flex-start",
-              gap: SPACING.xs,
-              paddingHorizontal: SPACING.md,
-              paddingVertical: SPACING.sm,
-              borderRadius: RADIUS.chip,
-              backgroundColor: colors.accent,
-            }}
-          >
-            <Icon name="ListChecks" size={ICON_SIZE} color={colors.accentForeground} />
-            <Text style={{ color: colors.accentForeground, fontSize: FONT_SIZE.small, fontWeight: "700" }}>
-              Review changes{reviewed.size > 0 ? ` (${reviewed.size} reviewed)` : ""}
-            </Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: SPACING.sm }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Review changes file by file"
+              onPress={startReview}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: SPACING.xs,
+                paddingHorizontal: SPACING.md,
+                paddingVertical: SPACING.sm,
+                borderRadius: RADIUS.chip,
+                backgroundColor: colors.accent,
+              }}
+            >
+              <Icon name="ListChecks" size={ICON_SIZE} color={colors.accentForeground} />
+              <Text style={{ color: colors.accentForeground, fontSize: FONT_SIZE.small, fontWeight: "700" }}>
+                Review changes{reviewed.size > 0 ? ` (${reviewed.size} reviewed)` : ""}
+              </Text>
+            </Pressable>
+            <ActionButton
+              label="Discard all"
+              icon="Trash2"
+              onPress={() => flow.request({ kind: "discard-all" }, filesChanged)}
+              destructive
+              theme={theme}
+            />
+          </View>
         ) : null}
       </View>
+      {flow.done ? (
+        <View style={{ marginHorizontal: SPACING.md, marginBottom: SPACING.md }}>
+          <UndoBanner flow={flow} theme={theme} />
+        </View>
+      ) : null}
 
       {groups.map((group) => {
         const counts = group.area === "staged" ? stagedStats : group.area === "untracked" ? null : unstagedStats;
@@ -372,6 +404,9 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
                       label={`Show ${group.area} changes in ${file.path}, ${word}`}
                       theme={theme}
                       onPress={() => setSelection({ kind: "file", file: { path: file.path, area: group.area } })}
+                      actions={
+                        narrow ? undefined : <FileActions path={file.path} area={group.area} flow={flow} theme={theme} iconOnly />
+                      }
                     />
                   );
                 })}
@@ -415,18 +450,21 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
           />
         </SectionCard>
       ) : null}
+
+      <BackupsCard target={target} theme={theme} now={now} onRestored={forgetRestored} />
     </ScrollView>
   );
 
   let detail = null;
-  if (selection?.kind === "file") {
+  if (selectedFile !== null && !selectionGone) {
     detail = (
       <WipFileDiff
-        key={`${selection.file.area}:${selection.file.path}`}
+        key={`${selectedFile.area}:${selectedFile.path}`}
         target={target}
-        file={selection.file}
+        file={selectedFile}
         worktreeToken={tokens?.worktreeToken}
         theme={theme}
+        flow={flow}
         expand={narrow ? undefined : { expanded, onToggle: toggleExpanded }}
         onClose={narrow ? undefined : close}
       />
@@ -458,8 +496,15 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
           onReviewedChange={setReviewed}
           theme={theme}
           narrow={narrow}
+          flow={flow}
           onExit={exitReview}
         />
+        {flow.done ? (
+          <View style={{ padding: SPACING.md }}>
+            <UndoBanner flow={flow} theme={theme} />
+          </View>
+        ) : null}
+        <ChangeConfirmModal flow={flow} theme={theme} />
       </View>
     );
   }
@@ -472,7 +517,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
           {list}
           <Modal
             title={selection?.kind === "commit" ? "Commit" : "File changes"}
-            open={detail !== null}
+            open={detail !== null && flow.pending === null}
             onOpenChange={(open) => {
               if (!open) close();
             }}
@@ -490,6 +535,7 @@ export function ChangesView({ target, theme, compact }: { target: RepoTarget; th
           ) : null}
         </View>
       )}
+      <ChangeConfirmModal flow={flow} theme={theme} />
     </View>
   );
 }

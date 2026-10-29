@@ -1,6 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { Icon } from "@getpaseo/plugin/client/react-native";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { FileStat } from "../../shared/contracts";
 import { type ChangeBadge, type FileKind, fileKind, fileName } from "../../shared/file-groups";
@@ -43,6 +43,8 @@ interface FileCardProps {
   label: string;
   theme: PluginTheme;
   onPress(): void;
+  /** Buttons beside the card, outside its pressable area so they never select the file. */
+  actions?: ReactNode;
 }
 
 function SizeBar({ additions, deletions, largest, theme }: { additions: number; deletions: number; largest: number; theme: PluginTheme }) {
@@ -69,59 +71,72 @@ export const FileCard = memo(function FileCard({
   label,
   theme,
   onPress,
+  actions,
 }: FileCardProps) {
   const { colors } = theme;
   const badgeColor = colors[BADGE_COLORS[badge]];
   const counted = stat && stat.additions !== null && stat.deletions !== null ? stat : null;
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected }}
-      onPress={onPress}
+    <View
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: SPACING.sm,
+        gap: SPACING.xs,
         marginHorizontal: SPACING.sm,
-        paddingHorizontal: SPACING.sm,
-        paddingVertical: SPACING.sm,
+        paddingRight: actions ? SPACING.sm : 0,
         borderRadius: RADIUS.card,
         backgroundColor: selected ? colors.surface2 : colors.surface0,
       }}
     >
-      <Icon name={KIND_ICONS[fileKind(path)]} size={ICON_SIZE} color={colors.foregroundMuted} />
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "600" }}>
-          {fileName(path)}
-        </Text>
-        {oldPath ? (
-          <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
-            from {oldPath}
-          </Text>
-        ) : null}
-      </View>
-      <View
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected }}
+        onPress={onPress}
         style={{
-          paddingHorizontal: SPACING.xs,
-          borderRadius: RADIUS.chip,
-          borderWidth: BADGE_BORDER_WIDTH,
-          borderColor: badgeColor,
+          flex: 1,
+          minWidth: 0,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: SPACING.sm,
+          paddingHorizontal: SPACING.sm,
+          paddingVertical: SPACING.sm,
         }}
       >
-        <Text style={{ color: badgeColor, fontSize: FONT_SIZE.small, fontWeight: "700" }}>{badge}</Text>
-      </View>
-      {counted ? (
-        <>
-          <Text style={{ color: colors.statusSuccess, fontSize: FONT_SIZE.small }}>+{counted.additions}</Text>
-          <Text style={{ color: colors.statusDanger, fontSize: FONT_SIZE.small }}>-{counted.deletions}</Text>
-          {compact ? null : (
-            <SizeBar additions={counted.additions ?? 0} deletions={counted.deletions ?? 0} largest={largestChange} theme={theme} />
-          )}
-        </>
-      ) : stat ? (
-        <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>binary</Text>
-      ) : null}
-    </Pressable>
+        <Icon name={KIND_ICONS[fileKind(path)]} size={ICON_SIZE} color={colors.foregroundMuted} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text numberOfLines={1} style={{ color: colors.foreground, fontSize: FONT_SIZE.body, fontWeight: "600" }}>
+            {fileName(path)}
+          </Text>
+          {oldPath ? (
+            <Text numberOfLines={1} style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
+              from {oldPath}
+            </Text>
+          ) : null}
+        </View>
+        <View
+          style={{
+            paddingHorizontal: SPACING.xs,
+            borderRadius: RADIUS.chip,
+            borderWidth: BADGE_BORDER_WIDTH,
+            borderColor: badgeColor,
+          }}
+        >
+          <Text style={{ color: badgeColor, fontSize: FONT_SIZE.small, fontWeight: "700" }}>{badge}</Text>
+        </View>
+        {counted ? (
+          <>
+            <Text style={{ color: colors.statusSuccess, fontSize: FONT_SIZE.small }}>+{counted.additions}</Text>
+            <Text style={{ color: colors.statusDanger, fontSize: FONT_SIZE.small }}>-{counted.deletions}</Text>
+            {compact ? null : (
+              <SizeBar additions={counted.additions ?? 0} deletions={counted.deletions ?? 0} largest={largestChange} theme={theme} />
+            )}
+          </>
+        ) : stat ? (
+          <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>binary</Text>
+        ) : null}
+      </Pressable>
+      {actions}
+    </View>
   );
 });

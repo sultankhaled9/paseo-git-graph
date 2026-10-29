@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { RepoStatus, RepoTarget } from "../../shared/contracts";
 import { describeWipChange, groupWorkInProgress } from "../../shared/status-text";
+import { useChangeFlow } from "../hooks/useChangeFlow";
 import { useWipDiff, type WipSelection } from "../hooks/useRepoQueries";
 import { FONT_SIZE, ICON_SIZE, RADIUS, SPACING } from "../tokens";
+import { ChangeConfirmModal, FileActions, UndoBanner } from "./ChangeControls";
 import { DiffPane, type ExpandControl } from "./DiffView";
 
 interface WipDetailProps {
@@ -31,6 +33,7 @@ export function WipDetail({ target, status, worktreeToken, theme, expand, onClos
     groups.some((group) => group.area === selection.area && group.files.some((file) => file.path === selection.path));
   const activeSelection = stillChanged ? selection : null;
   const diff = useWipDiff(target, activeSelection, worktreeToken);
+  const flow = useChangeFlow(target);
   const muted = { color: colors.foregroundMuted, fontSize: FONT_SIZE.small };
 
   const header = (
@@ -92,6 +95,16 @@ export function WipDetail({ target, status, worktreeToken, theme, expand, onClos
       {status.filesTruncated ? (
         <Text style={muted}>Only the first {status.files.length} changed files are listed.</Text>
       ) : null}
+      {activeSelection ? (
+        <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: SPACING.sm }}>
+          <Text numberOfLines={1} style={{ flexShrink: 1, ...muted }}>
+            {activeSelection.path}
+          </Text>
+          <FileActions path={activeSelection.path} area={activeSelection.area} flow={flow} theme={theme} />
+        </View>
+      ) : null}
+      <UndoBanner flow={flow} theme={theme} />
+      <ChangeConfirmModal flow={flow} theme={theme} />
     </View>
   );
 

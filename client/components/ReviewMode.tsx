@@ -15,6 +15,7 @@ import {
   reviewProgress,
 } from "../../shared/review";
 import { describeWipChange } from "../../shared/status-text";
+import type { ChangeFlow } from "../hooks/useChangeFlow";
 import { useWipDiff } from "../hooks/useRepoQueries";
 import {
   FONT_SIZE,
@@ -25,6 +26,7 @@ import {
   REVIEW_VERIFY_CONCURRENCY,
   SPACING,
 } from "../tokens";
+import { FileActions } from "./ChangeControls";
 import { DiffPane } from "./DiffView";
 
 const DIVIDER_WIDTH = 1;
@@ -40,6 +42,7 @@ interface ReviewModeProps {
   onReviewedChange(next: ReviewedFiles): void;
   theme: PluginTheme;
   narrow: boolean;
+  flow: ChangeFlow;
   onExit(): void;
 }
 
@@ -88,7 +91,7 @@ function Button({
  * diff that was reviewed: if that file changes, the mark is dropped, and every mark is re-checked
  * against fresh diffs before the review is called complete. Read-only: nothing is staged or committed.
  */
-export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewedChange, theme, narrow, onExit }: ReviewModeProps) {
+export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewedChange, theme, narrow, flow, onExit }: ReviewModeProps) {
   const { colors } = theme;
   const fetchWipDiff = useRpc(wipDiffRpc);
   const items = useMemo(() => reviewItems(status.files), [status.files]);
@@ -317,6 +320,7 @@ export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewed
             </Text>
           ) : null}
         </View>
+        <FileActions path={current.path} area={current.area} flow={flow} theme={theme} />
         {currentReviewed ? (
           <Button label="Reviewed" icon="CircleCheck" onPress={unmark} theme={theme} />
         ) : (

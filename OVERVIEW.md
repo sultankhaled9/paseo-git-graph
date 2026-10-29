@@ -14,6 +14,16 @@ A second tab, My Changes, explains in plain words everything that is only on you
 
 "Review changes" steps through every uncommitted file one at a time with its full diff and a checklist. Mark each file as reviewed; if a file changes after you reviewed it, its mark is removed, and before saying "All files reviewed" every file is checked once more against its latest version. Review progress is kept while the tab is open and is not saved. Commits to pull reflect your last fetch; the plugin never fetches, commits, pushes, or pulls for you. Open it from a workspace's tabs, its Explorer, or "Show my changes for this workspace" in the Command Center. Like Git Graph, it finds the repositories inside a workspace folder that is not a repository itself.
 
+## Discarding changes
+
+Each uncommitted file offers the actions that fit it: **Discard** for edits (not staged edits go back to the staged version, or to the last commit; staged edits go back to the last commit), **Unstage** for staged files (the edits stay in the file), and **Delete** for new files git is not tracking. **Discard all** in the summary card puts every changed file back to the last commit and deletes new files; files git ignores are never touched. The buttons are on the file cards, in the file's diff, in Review changes, and under the selected file in the graph's Uncommitted changes panel. They use the warning color, since red marks your own commits.
+
+Nothing changes until you confirm. The confirmation says what will be lost and lists every file it affects; Discard all also asks you to tick "I understand". If any of those files change between opening the confirmation and confirming, nothing is changed and you are asked to look again. Conflicted files, and Discard all during a merge, rebase, or cherry-pick, are refused.
+
+Before every change a backup of the affected files is saved, including staged versions, exact bytes and line endings, the executable bit, and symbolic links. Right after the change an **Undo** button appears, and the **Backups** card lists recent backups with **Restore**. Undo and Restore only go ahead if every file in the backup is still exactly as the change left it, so newer work is never overwritten; restoring removes that backup. The newest 20 backups per repository are kept.
+
+Backups live inside the repository as git refs under `refs/git-graph/backups/`, so they need no extra files and survive restarts. The graph hides them, but `git log --all` and other tools that list every ref will show them as "git-graph backup" commits. To read one by hand, run `git show refs/git-graph/backups/<id>:manifest.json`; to drop them all, delete those refs with `git update-ref -d`.
+
 ## Reading diffs
 
 Diffs show old and new line numbers, added lines in green and removed lines in red with the changed words highlighted, and collapse long unchanged stretches into "N unchanged lines". When there is room, the diff can be shown side by side (old on the left, new on the right); the Expand button gives a diff the full width of the view.
@@ -30,9 +40,9 @@ The view refreshes on its own every few seconds while it is open, so new commits
 
 Git must be installed on the machine running the Paseo daemon. Requires Paseo 0.12.0 or later.
 
-## What it reads
+## What it reads and changes
 
-The plugin is read-only. It runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine and never changes them: no checkout, commit, fetch, or push. It reads only repositories you added on the Git Graph screen, repositories found inside folders you added, or the repository of an open Paseo workspace or the repositories inside its folder, and shows uncommitted diffs only for files git reports as changed. Scanning a folder only lists its subfolders; it does not read file contents. Nothing is sent anywhere else. The lists of tracked repositories and folders are stored in the plugin's settings on the daemon.
+To show history and changes it runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine. It changes a repository only when you confirm a discard, unstage, delete, Undo, or Restore: then it writes the affected files and the staging area, and saves or removes a backup ref under `refs/git-graph/backups/`. It never checks out, commits, fetches, pulls, or pushes, and it never touches branches, tags, or files you did not confirm. It reads only repositories you added on the Git Graph screen, repositories found inside folders you added, or the repository of an open Paseo workspace or the repositories inside its folder, and shows uncommitted diffs only for files git reports as changed. Scanning a folder only lists its subfolders; it does not read file contents. Nothing is sent anywhere else. The lists of tracked repositories and folders are stored in the plugin's settings on the daemon.
 
 ## Limits
 
@@ -42,4 +52,7 @@ The plugin is read-only. It runs read-only git commands such as `git status`, `g
 - Stash entries are not drawn in the graph.
 - My Changes lists up to 50 commits in each direction (to push, to pull). Line counts for uncommitted files refresh when git status changes, so a second edit to an already changed file updates its count a little later than its diff. New untracked files show no line counts.
 - A folder group lists up to 300 repositories. A repository tracked on its own and also inside a tracked folder appears in both places.
+- Discard actions work on files, not folders; a new folder full of untracked files is deleted file by file with Discard all, and its empty folders stay. Submodules cannot be discarded.
+- Backups hold the full contents of the affected files in the repository's object store until they are restored or pruned. Very large files are read into memory while a backup is made.
+- If another program edits one of the files during the fraction of a second the action itself takes, that edit can be lost; the backup holds each file as it was just before the action.
 - Very wide histories show up to 10 branch lanes side by side, or 4 in narrow views such as the Explorer; when the window is too narrow for every column, the author and date columns are hidden.

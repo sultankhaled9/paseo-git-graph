@@ -89,7 +89,8 @@ function Button({
 /**
  * Steps through every uncommitted file with its full diff and a checklist. A mark is tied to the
  * diff that was reviewed: if that file changes, the mark is dropped, and every mark is re-checked
- * against fresh diffs before the review is called complete. Read-only: nothing is staged or committed.
+ * against fresh diffs before the review is called complete. Marking never stages or commits; the
+ * file header offers the same confirmed discard actions as the rest of My Changes.
  */
 export function ReviewMode({ target, status, worktreeToken, reviewed, onReviewedChange, theme, narrow, flow, onExit }: ReviewModeProps) {
   const { colors } = theme;

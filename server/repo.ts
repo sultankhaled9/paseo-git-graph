@@ -23,7 +23,7 @@ import {
   parseStatus,
 } from "./parse";
 
-const STATUS_ARGS: readonly string[] = [
+export const STATUS_ARGS: readonly string[] = [
   "status",
   "--porcelain=v2",
   "--branch",

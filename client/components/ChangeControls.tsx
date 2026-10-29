@@ -1,6 +1,6 @@
 import type { PluginTheme } from "@getpaseo/plugin";
 import { useRpc } from "@getpaseo/plugin/client";
-import { Icon, Modal } from "@getpaseo/plugin/client/react-native";
+import { Icon, Modal, ScrollView } from "@getpaseo/plugin/client/react-native";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { actionsFor, describeAction, type FileActionKind, fileAction } from "../../shared/change-actions";
@@ -10,7 +10,8 @@ import { type ChangeFlow, useBackups, useRefreshRepository } from "../hooks/useC
 import { FONT_SIZE, ICON_SIZE, ON_LANE_TEXT, RADIUS, SPACING } from "../tokens";
 
 const BORDER_WIDTH = 1;
-const PREVIEW_PATH_LIMIT = 12;
+/** The affected-files list scrolls past this height, so Cancel and Confirm stay in view. */
+const PREVIEW_LIST_MAX_HEIGHT = 240;
 const RECENT_BACKUPS_SHOWN = 5;
 
 const ACTION_ICONS: Readonly<Record<FileActionKind, string>> = {
@@ -125,16 +126,13 @@ export function ChangeConfirmModal({ flow, theme }: { flow: ChangeFlow; theme: P
             <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
               {preview.paths.length === 1 ? "This file is affected:" : `These ${preview.paths.length} files are affected:`}
             </Text>
-            {preview.paths.slice(0, PREVIEW_PATH_LIMIT).map((path) => (
-              <Text key={path} numberOfLines={1} style={{ color: colors.foreground, fontSize: FONT_SIZE.small }}>
-                {path}
-              </Text>
-            ))}
-            {preview.paths.length > PREVIEW_PATH_LIMIT ? (
-              <Text style={{ color: colors.foregroundMuted, fontSize: FONT_SIZE.small }}>
-                and {preview.paths.length - PREVIEW_PATH_LIMIT} more
-              </Text>
-            ) : null}
+            <ScrollView style={{ maxHeight: PREVIEW_LIST_MAX_HEIGHT }} contentContainerStyle={{ gap: SPACING.xs }}>
+              {preview.paths.map((path) => (
+                <Text key={path} style={{ color: colors.foreground, fontSize: FONT_SIZE.small }}>
+                  {path}
+                </Text>
+              ))}
+            </ScrollView>
           </View>
         ) : null}
         {needsAcknowledgement && preview?.allowed ? (

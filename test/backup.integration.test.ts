@@ -27,6 +27,8 @@ const GIT_ENV = {
 const BINARY = Buffer.from([0, 255, 13, 10, 7, 0, 42]);
 const CRLF = Buffer.from("line one\r\nline two\r\n");
 const EXECUTABLE_BITS = 0o111;
+const PERMISSION_BITS = 0o777;
+const PRIVATE_MODE = 0o600;
 
 let base = "";
 let repo = "";
@@ -119,18 +121,20 @@ describe("backups", () => {
     expect((await listBackups(repo)).some((summary) => summary.id === backup)).toBe(true);
   });
 
-  it("rolls back a restore that fails partway, so it can be retried", async () => {
+  it("rolls back a restore that fails partway, keeping permissions, so it can be retried", async () => {
     await mkdir(join(repo, "locked"));
     await writeFile(join(repo, "a.txt"), "first before\n");
     await writeFile(join(repo, "locked", "b.txt"), "second before\n");
     const backup = await createBackup(repo, { kind: "discard-all" }, ["a.txt", "locked/b.txt"]);
     await writeFile(join(repo, "a.txt"), "first after\n");
     await writeFile(join(repo, "locked", "b.txt"), "second after\n");
+    await chmod(join(repo, "a.txt"), PRIVATE_MODE);
     await recordAfterState(repo, backup);
     await chmod(join(repo, "locked"), 0o555);
     try {
       await expect(restoreBackup(repo, backup)).rejects.toThrow("Nothing was restored");
       expect(await readFile(join(repo, "a.txt"), "utf8")).toBe("first after\n");
+      expect((await lstat(join(repo, "a.txt"))).mode & PERMISSION_BITS).toBe(PRIVATE_MODE);
       expect(await readFile(join(repo, "locked", "b.txt"), "utf8")).toBe("second after\n");
     } finally {
       await chmod(join(repo, "locked"), 0o755);

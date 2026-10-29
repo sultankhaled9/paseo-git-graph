@@ -10,8 +10,10 @@ const MANIFEST_NAME = "manifest.json";
 const MANIFEST_VERSION = 1;
 const BACKUP_ID_RANDOM_BYTES = 4;
 const EXECUTABLE_BITS = 0o111;
-const FILE_MODE = 0o644;
-const EXECUTABLE_MODE = 0o755;
+const PERMISSION_BITS = 0o7777;
+/** Modes for files a restore creates, before the umask, as git checkout does. */
+const NEW_FILE_MODE = 0o666;
+const NEW_EXECUTABLE_MODE = 0o777;
 const GITLINK_MODE = "160000";
 /** Hex length of an object id per repository hash algorithm, for the all-zero id that removes an index entry. */
 const OBJECT_ID_LENGTH: Readonly<Record<string, number>> = { sha1: 40, sha256: 64 };
@@ -47,6 +49,9 @@ type LiveState =
   | { kind: "absent" }
   | { kind: "file"; bytes: Buffer; executable: boolean }
   | { kind: "symlink"; target: Buffer };
+
+/** A path's state with its contents in the object store, so a restore never holds every file in memory. */
+type Snapshot = { kind: "absent" } | { kind: "file"; blob: string; permissions: number } | { kind: "symlink"; blob: string };
 
 function reason(error: unknown): string {
   return error instanceof Error ? error.message : "The restore failed";
@@ -112,8 +117,13 @@ export async function fingerprintPaths(root: string, paths: readonly string[]): 
   return hash.digest("hex");
 }
 
-async function storeBlob(root: string, bytes: Buffer | string): Promise<string> {
-  return (await runGitRaw(root, ["hash-object", "-w", "--no-filters", "--stdin"], { input: bytes })).toString("utf8").trim();
+async function hashBlob(root: string, bytes: Buffer | string, write: boolean): Promise<string> {
+  const args = ["hash-object", ...(write ? ["-w"] : []), "--no-filters", "--stdin"];
+  return (await runGitRaw(root, args, { input: bytes })).toString("utf8").trim();
+}
+
+function storeBlob(root: string, bytes: Buffer | string): Promise<string> {
+  return hashBlob(root, bytes, true);
 }
 
 /** Writes the manifest and keeps every referenced blob reachable from one commit, so gc keeps them. */
@@ -195,26 +205,39 @@ export async function listBackups(root: string): Promise<BackupSummary[]> {
   return summaries;
 }
 
-async function loadWorktree(root: string, state: WorktreeState): Promise<LiveState> {
-  if (state.kind === "absent") return state;
-  const bytes = await runGitRaw(root, ["cat-file", "blob", state.blob]);
-  return state.kind === "symlink" ? { kind: "symlink", target: bytes } : { kind: "file", bytes, executable: state.executable };
+async function readBlob(root: string, blob: string): Promise<Buffer> {
+  return runGitRaw(root, ["cat-file", "blob", blob]);
 }
 
-function sameLive(a: LiveState, b: LiveState): boolean {
-  if (a.kind === "file" && b.kind === "file") return a.executable === b.executable && a.bytes.equals(b.bytes);
-  if (a.kind === "symlink" && b.kind === "symlink") return a.target.equals(b.target);
+/** Fails unless every blob exists and is small enough to read back, without loading any of them. */
+async function checkBlobsReadable(root: string, blobs: readonly string[]): Promise<void> {
+  if (blobs.length === 0) return;
+  const stdout = (await runGitRaw(root, ["cat-file", "--batch-check"], { input: `${blobs.join("\n")}\n` })).toString("utf8");
+  for (const line of stdout.trim().split("\n")) {
+    const [blob = "", type = "", size = ""] = line.split(" ");
+    if (type !== "blob") throw new Error(`The backup is missing its copy of a file (${blob})`);
+    if (Number(size) > GIT_MAX_BUFFER_BYTES) throw new Error(`The backup holds a file too large to restore here (${blob})`);
+  }
+}
+
+/** The path's current state; with `store`, its contents are also written to the object store. */
+async function snapshot(root: string, path: string, store: boolean): Promise<Snapshot> {
+  const absolute = await repoFilePath(root, path);
+  const info = await lstat(absolute).catch(() => null);
+  if (!info) return { kind: "absent" };
+  if (info.isSymbolicLink()) return { kind: "symlink", blob: await hashBlob(root, await readlink(absolute, { encoding: "buffer" }), store) };
+  if (info.isFile()) return { kind: "file", blob: await hashBlob(root, await readFile(absolute), store), permissions: info.mode & PERMISSION_BITS };
+  throw new Error(`${path} is a folder, not a file`);
+}
+
+function sameSnapshot(a: Snapshot, b: Snapshot): boolean {
+  if (a.kind === "file" && b.kind === "file") return a.blob === b.blob && a.permissions === b.permissions;
+  if (a.kind === "symlink" && b.kind === "symlink") return a.blob === b.blob;
   return a.kind === "absent" && b.kind === "absent";
 }
 
-/** Writes `state` back unless the path already holds it, so a write that never started is not repeated. */
-async function putBack(root: string, path: string, state: LiveState): Promise<void> {
-  const now = await readLive(root, path).catch(() => null);
-  if (now && sameLive(now, state)) return;
-  await writeLive(root, path, state);
-}
-
-async function writeLive(root: string, path: string, state: LiveState): Promise<void> {
+/** Replaces whatever is at `path` with `state`; `permissions` restores exact mode bits instead of the defaults. */
+async function writeLive(root: string, path: string, state: LiveState, permissions?: number): Promise<void> {
   const absolute = await repoFilePath(root, path);
   const existing = await lstat(absolute).catch(() => null);
   if (existing?.isDirectory()) throw new Error(`${path} is now a folder`);
@@ -227,8 +250,24 @@ async function writeLive(root: string, path: string, state: LiveState): Promise<
     await symlink(state.target, absolute);
     return;
   }
-  await writeFile(absolute, state.bytes);
-  await chmod(absolute, state.executable ? EXECUTABLE_MODE : FILE_MODE);
+  await writeFile(absolute, state.bytes, { mode: state.executable ? NEW_EXECUTABLE_MODE : NEW_FILE_MODE });
+  if (permissions !== undefined) await chmod(absolute, permissions);
+}
+
+async function writeSaved(root: string, path: string, state: WorktreeState): Promise<void> {
+  if (state.kind === "absent") return writeLive(root, path, state);
+  const bytes = await readBlob(root, state.blob);
+  await writeLive(root, path, state.kind === "symlink" ? { kind: "symlink", target: bytes } : { kind: "file", bytes, executable: state.executable });
+}
+
+/** Writes a snapshot back unless the path already holds it, so a write that never started is not repeated. */
+async function putBack(root: string, path: string, state: Snapshot): Promise<void> {
+  const now = await snapshot(root, path, false).catch(() => null);
+  if (now && sameSnapshot(now, state)) return;
+  if (state.kind === "absent") return writeLive(root, path, state);
+  const bytes = await readBlob(root, state.blob);
+  if (state.kind === "symlink") return writeLive(root, path, { kind: "symlink", target: bytes });
+  await writeLive(root, path, { kind: "file", bytes, executable: (state.permissions & EXECUTABLE_BITS) !== 0 }, state.permissions);
 }
 
 /** One `update-index --index-info` input that drops every stage of each path, then adds the saved entries. */
@@ -246,9 +285,9 @@ async function indexReplacement(root: string, manifest: Manifest): Promise<strin
 
 /**
  * Puts a backup's files and staged entries back, all or nothing: every path must still be exactly
- * as the action left it, so a later edit is never overwritten. Everything that can be read is read
- * before the first write, and a failure partway puts the written files back, so Restore can be
- * retried. The backup ref is removed afterwards.
+ * as the action left it, so a later edit is never overwritten. The backup is checked and the current
+ * files are saved before the first write, and a failure partway puts the written files back with
+ * their permissions, so Restore can be retried. The backup ref is removed afterwards.
  */
 export async function restoreBackup(root: string, id: string): Promise<string[]> {
   const { manifest } = await readManifest(root, id);
@@ -262,12 +301,13 @@ export async function restoreBackup(root: string, id: string): Promise<string[]>
     }
   }
   const paths = manifest.entries.map((entry) => entry.path);
-  const steps: { path: string; saved: LiveState; current: LiveState }[] = [];
+  // Before any write: the backup must be readable, and the current files are saved for a rollback.
+  // Contents go through the object store one file at a time, so memory stays bounded by the largest file.
+  const steps: { path: string; saved: WorktreeState; current: Snapshot }[] = [];
   let indexInput: string;
   try {
-    for (const entry of manifest.entries) {
-      steps.push({ path: entry.path, saved: await loadWorktree(root, entry.worktree), current: await readLive(root, entry.path) });
-    }
+    await checkBlobsReadable(root, manifest.entries.flatMap((entry) => (entry.worktree.kind === "absent" ? [] : [entry.worktree.blob])));
+    for (const entry of manifest.entries) steps.push({ path: entry.path, saved: entry.worktree, current: await snapshot(root, entry.path, true) });
     indexInput = await indexReplacement(root, manifest);
   } catch (error) {
     throw new Error(`${reason(error)}. Nothing was restored; the backup is kept.`);
@@ -277,7 +317,7 @@ export async function restoreBackup(root: string, id: string): Promise<string[]>
   try {
     for (const step of steps) {
       started.push(step);
-      await writeLive(root, step.path, step.saved);
+      await writeSaved(root, step.path, step.saved);
     }
     // One index write: git applies it through index.lock, so it either fully lands or not at all.
     await runGitRaw(root, ["update-index", "-z", "--index-info"], { input: indexInput });

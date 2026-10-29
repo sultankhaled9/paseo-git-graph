@@ -1,36 +1,12 @@
 import { createHash } from "node:crypto";
 import { lstat, unlink } from "node:fs/promises";
-import { resolve } from "node:path";
 import type { ChangeAction, ChangePreview, RepoStatus } from "../shared/contracts";
 import { fileInArea } from "../shared/status-text";
 import { backupRef, createBackup, fingerprintPaths, pruneBackups, recordAfterState, repoFilePath, restoreBackup } from "./backup";
 import { runGit, runGitOptional } from "./git";
 import { parseStatus } from "./parse";
 import { STATUS_ARGS } from "./repo";
-
-/**
- * Files git keeps while a merge, rebase, cherry-pick, or revert is in progress. REBASE_HEAD is not
- * one: git can leave it behind after a rebase ends, and like git status, only the rebase folders count.
- */
-const IN_PROGRESS_MARKERS: readonly string[] = ["MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply"];
-
-const repositoryLocks = new Map<string, Promise<unknown>>();
-
-/** Runs `task` after every earlier write to the same repository has finished. */
-function serialized<Result>(root: string, task: () => Promise<Result>): Promise<Result> {
-  const previous = repositoryLocks.get(root) ?? Promise.resolve();
-  const run = previous.catch(() => undefined).then(task);
-  repositoryLocks.set(root, run);
-  return run;
-}
-
-async function operationInProgress(root: string): Promise<boolean> {
-  for (const marker of IN_PROGRESS_MARKERS) {
-    const path = (await runGit(root, ["rev-parse", "--git-path", marker])).trim();
-    if (await lstat(resolve(root, path)).catch(() => null)) return true;
-  }
-  return false;
-}
+import { OPERATION_IN_PROGRESS_REASON, operationInProgress, serialized } from "./repo-lock";
 
 async function headExists(root: string): Promise<boolean> {
   return (await runGitOptional(root, ["rev-parse", "-q", "--verify", "HEAD"])).trim().length > 0;
@@ -57,7 +33,7 @@ function planFor(action: ChangeAction, status: RepoStatus): Plan {
 
 async function currentPlan(root: string, action: ChangeAction): Promise<Plan> {
   if (action.kind === "discard-all" && (await operationInProgress(root))) {
-    return { allowed: false, reason: "A merge, rebase, or cherry-pick is in progress. Finish or abort it first." };
+    return { allowed: false, reason: OPERATION_IN_PROGRESS_REASON };
   }
   const status = parseStatus(await runGit(root, STATUS_ARGS), root, Number.POSITIVE_INFINITY);
   return planFor(action, status);

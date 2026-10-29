@@ -2,7 +2,7 @@ Git Graph shows the commit history of your git repositories as a branch graph in
 
 Commits you wrote are marked in red: a red author name and initials badge and a red bar at the left edge. "You" is the git identity configured for that repository (`user.email`, or `user.name` when no email is set). Red is kept for this, so lanes never use red.
 
-The top of the view says what is checked out now in plain words, for example "On main, 2 ahead and 1 behind origin/main". Below it, an "Uncommitted changes" row shows your staged, not staged, untracked, and conflicted files, connected to the commit you are on. Select it to see the files grouped by kind and read each file's diff.
+The top of the view says what is checked out now in plain words, for example "On main, 2 ahead and 1 behind origin/main". Select it to switch branches (see below). Below it, an "Uncommitted changes" row shows your staged, not staged, untracked, and conflicted files, connected to the commit you are on. Select it to see the files grouped by kind and read each file's diff.
 
 Select a commit to see its full message, author and committer, parent commits, and changed files, each marked as added, modified, deleted, renamed, copied, or type changed with its line counts. Select a file to read its diff. Merge commits are compared against their first parent.
 
@@ -24,6 +24,14 @@ Before every change a backup of the affected files is saved, including staged ve
 
 Backups live inside the repository as git refs under `refs/git-graph/backups/`, so they need no extra files and survive restarts. The graph hides them, but `git log --all` and other tools that list every ref will show them as "git-graph backup" commits. To read one by hand, run `git show refs/git-graph/backups/<id>:manifest.json`; to drop them all, delete those refs with `git update-ref -d`.
 
+## Switching branches
+
+Select the "On main" line at the top of Git Graph or My Changes to open the branch picker. Type to search. "On this machine" lists your local branches, the current one first; "Only on the server" lists remote branches that no local branch tracks yet. Each row shows the branch it tracks, its last commit message, and how long ago that was. The branch you are on, and a branch open in another worktree of the same repository, are shown but cannot be picked.
+
+Picking a branch asks for confirmation first, and says what will happen. Your uncommitted changes come along to the new branch, as with `git switch`. If git would have to overwrite any of them, or a file git ignores (such as a `.env`) that the other branch tracks, nothing changes and the message names the files; commit, discard, or move them and try again. Picking a remote branch such as `origin/feature` creates a local `feature` that tracks it and switches to it; if a local `feature` already exists and tracks something else, pick that one instead. Switching is refused during a merge, rebase, cherry-pick, or revert, and when files have conflicts. If the branch or your files change while the confirmation is open, nothing changes and you are asked to look again.
+
+After a switch, a banner says which branch you are on and offers "Switch back" to the branch you came from, through the same confirmation. The plugin never fetches, so remote branches are as of your last fetch.
+
 ## Reading diffs
 
 Diffs show old and new line numbers, added lines in green and removed lines in red with the changed words highlighted, and collapse long unchanged stretches into "N unchanged lines". When there is room, the diff can be shown side by side (old on the left, new on the right); the Expand button gives a diff the full width of the view.
@@ -42,7 +50,7 @@ Git must be installed on the machine running the Paseo daemon. Requires Paseo 0.
 
 ## What it reads and changes
 
-To show history and changes it runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine. It changes a repository only when you confirm a discard, unstage, delete, Undo, or Restore: then it writes the affected files and the staging area, and saves or removes a backup ref under `refs/git-graph/backups/`. It never checks out, commits, fetches, pulls, or pushes, and it never touches branches, tags, or files you did not confirm. It reads only repositories you added on the Git Graph screen, repositories found inside folders you added, or the repository of an open Paseo workspace or the repositories inside its folder, and shows uncommitted diffs only for files git reports as changed. Scanning a folder only lists its subfolders; it does not read file contents. Nothing is sent anywhere else. The lists of tracked repositories and folders are stored in the plugin's settings on the daemon.
+To show history and changes it runs read-only git commands such as `git status`, `git log`, `git show`, `git diff`, and `git config` in your repositories on the daemon machine. It changes a repository only when you confirm an action. A discard, unstage, delete, Undo, or Restore writes the affected files and the staging area, and saves or removes a backup ref under `refs/git-graph/backups/`. A branch switch runs `git switch` (never forced) and, for a remote branch, creates the local branch that tracks it. It never commits, fetches, pulls, pushes, stashes, merges, or deletes branches, and it never touches tags or files you did not confirm. It reads only repositories you added on the Git Graph screen, repositories found inside folders you added, or the repository of an open Paseo workspace or the repositories inside its folder, and shows uncommitted diffs only for files git reports as changed. Scanning a folder only lists its subfolders; it does not read file contents. Nothing is sent anywhere else. The lists of tracked repositories and folders are stored in the plugin's settings on the daemon.
 
 ## Limits
 
@@ -55,4 +63,5 @@ To show history and changes it runs read-only git commands such as `git status`,
 - Discard actions work on files, not folders; a new folder full of untracked files is deleted file by file with Discard all, and its empty folders stay. Submodules cannot be discarded.
 - Backups hold the full contents of the affected files in the repository's object store until they are restored or pruned, and files are read into memory while a backup is made. A file larger than 32 MB cannot be backed up, so actions on it are refused and nothing changes.
 - If another program edits one of the files during the fraction of a second the action itself takes, that edit can be lost; the backup holds each file as it was just before the action.
+- The branch picker lists up to 2000 branches, those with the newest commits first. It cannot create a new branch or check out a single commit or tag.
 - Very wide histories show up to 10 branch lanes side by side, or 4 in narrow views such as the Explorer; when the window is too narrow for every column, the author and date columns are hidden.

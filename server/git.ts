@@ -127,3 +127,51 @@ export function runGitCapped(
     });
   });
 }
+
+export interface RawGitOptions {
+  input?: Buffer | string;
+  env?: Readonly<Record<string, string>>;
+}
+
+/** Runs git with optional stdin and extra environment, returning stdout as raw bytes (no decoding). */
+export function runGitRaw(cwd: string, args: readonly string[], options: RawGitOptions = {}): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("git", [...GIT_CONFIG_ARGS, ...args], {
+      cwd,
+      env: { ...gitEnv(), ...options.env },
+      timeout: GIT_TIMEOUT_MS,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const chunks: Buffer[] = [];
+    let size = 0;
+    let overflow = false;
+    let stderr = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > GIT_MAX_BUFFER_BYTES) {
+        overflow = true;
+        child.kill();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      if (stderr.length < GIT_STDERR_MAX_CHARS) stderr += chunk;
+    });
+    child.on("error", (error) => reject(toGitError(error)));
+    child.on("close", (code, signal) => {
+      if (overflow) {
+        reject(new GitError("git output was larger than the plugin allows", code, stderr));
+        return;
+      }
+      if (code !== 0) {
+        const reason = signal ? `git stopped by ${signal}` : `git exited with code ${code}`;
+        reject(new GitError(firstLine(stderr) || reason, code, stderr));
+        return;
+      }
+      resolve(Buffer.concat(chunks));
+    });
+    child.stdin.end(options.input ?? "");
+  });
+}

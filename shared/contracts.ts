@@ -1,6 +1,7 @@
 import { defineRpc, defineSettings } from "@getpaseo/plugin";
 import { z } from "zod";
 import {
+  BACKUP_ID_PATTERN,
   HASH_PATTERN,
   LOG_MAX_LIMIT,
   FOLDER_SCAN_DEPTH,
@@ -288,6 +289,63 @@ export const syncCommitsRpc = defineRpc({
   name: "repo.sync-commits",
   input: z.object({ target: repoTargetSchema }),
   output: syncCommitsSchema,
+});
+
+/**
+ * A change to the working tree or index. "discard" from the not-staged area goes back to the staged
+ * version; from the staged area it goes back to the last commit. "unstage" keeps the file's edits.
+ */
+export const changeActionSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("discard"), path: repoPathSchema, area: z.enum(["staged", "unstaged"]) }),
+  z.object({ kind: z.literal("unstage"), path: repoPathSchema }),
+  z.object({ kind: z.literal("delete"), path: repoPathSchema }),
+  z.object({ kind: z.literal("discard-all") }),
+]);
+export type ChangeAction = z.infer<typeof changeActionSchema>;
+
+export const changePreviewSchema = z.discriminatedUnion("allowed", [
+  z.object({
+    allowed: z.literal(true),
+    paths: z.array(z.string()),
+    /** Fingerprint of the exact index entries and file contents this preview describes. */
+    fingerprint: z.string().min(1),
+  }),
+  z.object({ allowed: z.literal(false), reason: z.string() }),
+]);
+export type ChangePreview = z.infer<typeof changePreviewSchema>;
+
+export const previewChangeRpc = defineRpc({
+  name: "repo.preview-change",
+  input: z.object({ target: repoTargetSchema, action: changeActionSchema }),
+  output: changePreviewSchema,
+});
+
+/** Applies an action only if the repository still matches the previewed fingerprint; a backup is taken first. */
+export const applyChangeRpc = defineRpc({
+  name: "repo.apply-change",
+  input: z.object({ target: repoTargetSchema, action: changeActionSchema, fingerprint: z.string().min(1) }),
+  output: z.object({ backupId: z.string().regex(BACKUP_ID_PATTERN) }),
+});
+
+export const backupSummarySchema = z.object({
+  id: z.string().regex(BACKUP_ID_PATTERN),
+  createdAt: z.string(),
+  action: changeActionSchema,
+  paths: z.array(z.string()),
+});
+export type BackupSummary = z.infer<typeof backupSummarySchema>;
+
+export const listBackupsRpc = defineRpc({
+  name: "repo.backups",
+  input: z.object({ target: repoTargetSchema }),
+  output: z.object({ backups: z.array(backupSummarySchema) }),
+});
+
+/** Puts every file of a backup back, all or nothing, only if none changed since the action. */
+export const restoreBackupRpc = defineRpc({
+  name: "repo.restore-backup",
+  input: z.object({ target: repoTargetSchema, backupId: z.string().regex(BACKUP_ID_PATTERN) }),
+  output: z.object({ restoredPaths: z.array(z.string()) }),
 });
 
 export const revisionRpc = defineRpc({

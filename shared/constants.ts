@@ -45,5 +45,10 @@ export const LANE_PALETTE: readonly string[] = [
 
 export const HASH_PATTERN = /^[0-9a-f]{7,64}$/;
 
+/** Backups taken before a discard: kept per repository, and how a backup is named. */
+export const MAX_BACKUPS = 20;
+export const BACKUP_ID_PATTERN = /^\d{13}-[0-9a-f]{8}$/;
+export const BACKUP_REF_PREFIX = "refs/git-graph/backups/";
+
 /** The porcelain v2 XY marker for "no change on this side". */
 export const STATUS_UNCHANGED = ".";

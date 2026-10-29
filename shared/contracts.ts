@@ -3,12 +3,15 @@ import { z } from "zod";
 import {
   BACKUP_ID_PATTERN,
   HASH_PATTERN,
+  LOCAL_BRANCH_PREFIX,
   LOG_MAX_LIMIT,
   FOLDER_SCAN_DEPTH,
   MAX_FOLDERS,
   MAX_PROJECTS,
   PROJECT_NAME_MAX_LENGTH,
   PROJECTS_SETTINGS_ID,
+  REF_MAX_LENGTH,
+  REMOTE_BRANCH_PREFIX,
 } from "./constants";
 
 export const projectSchema = z.object({
@@ -346,6 +349,87 @@ export const restoreBackupRpc = defineRpc({
   name: "repo.restore-backup",
   input: z.object({ target: repoTargetSchema, backupId: z.string().regex(BACKUP_ID_PATTERN) }),
   output: z.object({ restoredPaths: z.array(z.string()) }),
+});
+
+/** A full branch ref, local (refs/heads/...) or remote-tracking (refs/remotes/...). The server only acts on refs it lists. */
+export const branchRefSchema = z
+  .string()
+  .max(REF_MAX_LENGTH)
+  .refine(
+    (value) =>
+      (value.startsWith(LOCAL_BRANCH_PREFIX) || value.startsWith(REMOTE_BRANCH_PREFIX)) &&
+      !/[\0-\x20\x7f]/.test(value),
+    { message: "Not a branch ref" },
+  );
+
+export const localBranchSchema = z.object({
+  ref: branchRefSchema,
+  name: z.string(),
+  upstream: z.string().nullable(),
+  current: z.boolean(),
+  /** Another worktree of this repository has the branch checked out; git refuses to switch to it here. */
+  otherWorktree: z.string().nullable(),
+  subject: z.string(),
+  date: z.string(),
+});
+export type LocalBranch = z.infer<typeof localBranchSchema>;
+
+/** A remote branch with no local branch tracking it yet; switching creates `localName` to track it. */
+export const remoteBranchSchema = z.object({
+  ref: branchRefSchema,
+  name: z.string(),
+  localName: z.string(),
+  /** A local branch already has `localName` but tracks something else, so a tracking branch cannot be created. */
+  nameTaken: z.boolean(),
+  subject: z.string(),
+  date: z.string(),
+});
+export type RemoteBranch = z.infer<typeof remoteBranchSchema>;
+
+export const branchListSchema = z.object({
+  local: z.array(localBranchSchema),
+  remote: z.array(remoteBranchSchema),
+  truncated: z.boolean(),
+});
+export type BranchList = z.infer<typeof branchListSchema>;
+
+export const listBranchesRpc = defineRpc({
+  name: "repo.branches",
+  input: z.object({ target: repoTargetSchema }),
+  output: branchListSchema,
+});
+
+export const switchPreviewSchema = z.discriminatedUnion("allowed", [
+  z.object({
+    allowed: z.literal(true),
+    /** The local branch the repository will be on afterwards. */
+    branch: z.string(),
+    /** Set for a remote branch: the remote branch the new local branch will track. */
+    tracks: z.string().nullable(),
+    /** Uncommitted files that come along to the new branch. */
+    carriedFiles: z.number().int().nonnegative(),
+    /** Where HEAD and the target point now; the switch is refused if either moved. */
+    fingerprint: z.string().min(1),
+  }),
+  z.object({ allowed: z.literal(false), reason: z.string() }),
+]);
+export type SwitchPreview = z.infer<typeof switchPreviewSchema>;
+
+export const previewSwitchRpc = defineRpc({
+  name: "repo.preview-switch",
+  input: z.object({ target: repoTargetSchema, ref: branchRefSchema }),
+  output: switchPreviewSchema,
+});
+
+/** Switches with git's own safety: uncommitted changes come along, and nothing changes if git would overwrite any. */
+export const switchBranchRpc = defineRpc({
+  name: "repo.switch-branch",
+  input: z.object({ target: repoTargetSchema, ref: branchRefSchema, fingerprint: z.string().min(1) }),
+  output: z.object({
+    branch: z.string(),
+    /** The local branch that was checked out before, for Switch back; null when HEAD was detached. */
+    previous: branchRefSchema.nullable(),
+  }),
 });
 
 export const revisionRpc = defineRpc({

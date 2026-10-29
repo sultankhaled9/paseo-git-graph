@@ -7,10 +7,13 @@ import {
   inspectPathRpc,
   workspaceReposRpc,
   diffRpc,
+  listBranchesRpc,
   logRpc,
+  previewSwitchRpc,
   projectsSettings,
   revisionRpc,
   statusRpc,
+  switchBranchRpc,
 } from "../shared/contracts";
 
 const target = { kind: "project", projectId: "p1" } as const;
@@ -84,4 +87,22 @@ describe("contracts", () => {
     expect(diffRpc.input.safeParse({ target, hash, path: "b", oldPath: "/a" }).success).toBe(false);
   });
 
+
+  it("accepts only local or remote-tracking branch refs for a switch", () => {
+    const valid = ["refs/heads/main", "refs/heads/feature/x", "refs/remotes/origin/feature"];
+    const invalid = ["main", "refs/tags/v1", "refs/stash", "refs/git-graph/backups/1", "refs/heads/a b", "refs/heads/a\nb", "--force", ""];
+    for (const ref of valid) expect(previewSwitchRpc.input.safeParse({ target, ref }).success).toBe(true);
+    for (const ref of invalid) expect(previewSwitchRpc.input.safeParse({ target, ref }).success).toBe(false);
+    expect(switchBranchRpc.input.safeParse({ target, ref: "refs/heads/main", fingerprint: "" }).success).toBe(false);
+    expect(switchBranchRpc.output.safeParse({ branch: "main", previous: null }).success).toBe(true);
+  });
+
+  it("parses a branch list", () => {
+    const list = {
+      local: [{ ref: "refs/heads/main", name: "main", upstream: "origin/main", current: true, otherWorktree: null, subject: "s", date: "d" }],
+      remote: [{ ref: "refs/remotes/origin/x", name: "origin/x", localName: "x", nameTaken: false, subject: "s", date: "d" }],
+      truncated: false,
+    };
+    expect(listBranchesRpc.output.parse(list)).toEqual(list);
+  });
 });

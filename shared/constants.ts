@@ -50,5 +50,11 @@ export const MAX_BACKUPS = 20;
 export const BACKUP_ID_PATTERN = /^\d{13}-[0-9a-f]{8}$/;
 export const BACKUP_REF_PREFIX = "refs/git-graph/backups/";
 
+/** Branch switching: the ref namespaces a switch can target, and bounds on what is listed. */
+export const LOCAL_BRANCH_PREFIX = "refs/heads/";
+export const REMOTE_BRANCH_PREFIX = "refs/remotes/";
+export const REF_MAX_LENGTH = 1024;
+export const MAX_LISTED_BRANCHES = 2000;
+
 /** The porcelain v2 XY marker for "no change on this side". */
 export const STATUS_UNCHANGED = ".";

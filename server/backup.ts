@@ -2,7 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { chmod, lstat, mkdir, readFile, readlink, symlink, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { z } from "zod";
-import { BACKUP_REF_PREFIX, MAX_BACKUPS } from "../shared/constants";
+import { BACKUP_REF_PREFIX, GIT_MAX_BUFFER_BYTES, MAX_BACKUPS } from "../shared/constants";
 import { type BackupSummary, type ChangeAction, changeActionSchema } from "../shared/contracts";
 import { runGit, runGitOptional, runGitRaw } from "./git";
 
@@ -13,6 +13,8 @@ const EXECUTABLE_BITS = 0o111;
 const FILE_MODE = 0o644;
 const EXECUTABLE_MODE = 0o755;
 const GITLINK_MODE = "160000";
+/** Hex length of an object id per repository hash algorithm, for the all-zero id that removes an index entry. */
+const OBJECT_ID_LENGTH: Readonly<Record<string, number>> = { sha1: 40, sha256: 64 };
 const BACKUP_IDENTITY: Readonly<Record<string, string>> = {
   GIT_AUTHOR_NAME: "Git Graph plugin",
   GIT_AUTHOR_EMAIL: "git-graph@localhost",
@@ -45,6 +47,10 @@ type LiveState =
   | { kind: "absent" }
   | { kind: "file"; bytes: Buffer; executable: boolean }
   | { kind: "symlink"; target: Buffer };
+
+function reason(error: unknown): string {
+  return error instanceof Error ? error.message : "The restore failed";
+}
 
 export function backupRef(id: string): string {
   return `${BACKUP_REF_PREFIX}${id}`;
@@ -140,6 +146,10 @@ export async function createBackup(root: string, action: ChangeAction, paths: re
   for (const path of paths) {
     const [live, index] = await Promise.all([readLive(root, path), readIndex(root, path)]);
     let worktree: WorktreeState = { kind: "absent" };
+    // A backup that could not be read back would make Undo impossible, so such files are refused up front.
+    if (live.kind === "file" && live.bytes.length > GIT_MAX_BUFFER_BYTES) {
+      throw new Error(`${path} is too large to back up, so nothing was changed`);
+    }
     if (live.kind === "file") worktree = { kind: "file", blob: await storeBlob(root, live.bytes), executable: live.executable };
     if (live.kind === "symlink") worktree = { kind: "symlink", blob: await storeBlob(root, live.target) };
     entries.push({ path, worktree, index });
@@ -185,7 +195,26 @@ export async function listBackups(root: string): Promise<BackupSummary[]> {
   return summaries;
 }
 
-async function writeWorktree(root: string, path: string, state: WorktreeState): Promise<void> {
+async function loadWorktree(root: string, state: WorktreeState): Promise<LiveState> {
+  if (state.kind === "absent") return state;
+  const bytes = await runGitRaw(root, ["cat-file", "blob", state.blob]);
+  return state.kind === "symlink" ? { kind: "symlink", target: bytes } : { kind: "file", bytes, executable: state.executable };
+}
+
+function sameLive(a: LiveState, b: LiveState): boolean {
+  if (a.kind === "file" && b.kind === "file") return a.executable === b.executable && a.bytes.equals(b.bytes);
+  if (a.kind === "symlink" && b.kind === "symlink") return a.target.equals(b.target);
+  return a.kind === "absent" && b.kind === "absent";
+}
+
+/** Writes `state` back unless the path already holds it, so a write that never started is not repeated. */
+async function putBack(root: string, path: string, state: LiveState): Promise<void> {
+  const now = await readLive(root, path).catch(() => null);
+  if (now && sameLive(now, state)) return;
+  await writeLive(root, path, state);
+}
+
+async function writeLive(root: string, path: string, state: LiveState): Promise<void> {
   const absolute = await repoFilePath(root, path);
   const existing = await lstat(absolute).catch(() => null);
   if (existing?.isDirectory()) throw new Error(`${path} is now a folder`);
@@ -194,18 +223,32 @@ async function writeWorktree(root: string, path: string, state: WorktreeState): 
   await mkdir(dirname(absolute), { recursive: true });
   // The folders just created must still be real directories before anything is written into them.
   await repoFilePath(root, path);
-  const bytes = await runGitRaw(root, ["cat-file", "blob", state.blob]);
   if (state.kind === "symlink") {
-    await symlink(bytes.toString("utf8"), absolute);
+    await symlink(state.target, absolute);
     return;
   }
-  await writeFile(absolute, bytes);
+  await writeFile(absolute, state.bytes);
   await chmod(absolute, state.executable ? EXECUTABLE_MODE : FILE_MODE);
+}
+
+/** One `update-index --index-info` input that drops every stage of each path, then adds the saved entries. */
+async function indexReplacement(root: string, manifest: Manifest): Promise<string> {
+  const format = (await runGit(root, ["rev-parse", "--show-object-format"])).trim();
+  const length = OBJECT_ID_LENGTH[format];
+  if (length === undefined) throw new Error(`Unsupported object format ${format}`);
+  const zero = "0".repeat(length);
+  const lines = [
+    ...manifest.entries.map((entry) => `0 ${zero}\t${entry.path}`),
+    ...manifest.entries.flatMap((entry) => entry.index.map((index) => `${index.mode} ${index.blob} ${index.stage}\t${entry.path}`)),
+  ];
+  return `${lines.join("\0")}\0`;
 }
 
 /**
  * Puts a backup's files and staged entries back, all or nothing: every path must still be exactly
- * as the action left it, so a later edit is never overwritten. The backup ref is removed afterwards.
+ * as the action left it, so a later edit is never overwritten. Everything that can be read is read
+ * before the first write, and a failure partway puts the written files back, so Restore can be
+ * retried. The backup ref is removed afterwards.
  */
 export async function restoreBackup(root: string, id: string): Promise<string[]> {
   const { manifest } = await readManifest(root, id);
@@ -219,10 +262,33 @@ export async function restoreBackup(root: string, id: string): Promise<string[]>
     }
   }
   const paths = manifest.entries.map((entry) => entry.path);
-  for (const entry of manifest.entries) await writeWorktree(root, entry.path, entry.worktree);
-  await runGitRaw(root, ["update-index", "-z", "--force-remove", "--stdin"], { input: `${paths.join("\0")}\0` });
-  const indexLines = manifest.entries.flatMap((entry) => entry.index.map((index) => `${index.mode} ${index.blob} ${index.stage}\t${entry.path}`));
-  if (indexLines.length > 0) await runGitRaw(root, ["update-index", "-z", "--index-info"], { input: `${indexLines.join("\0")}\0` });
+  const steps: { path: string; saved: LiveState; current: LiveState }[] = [];
+  let indexInput: string;
+  try {
+    for (const entry of manifest.entries) {
+      steps.push({ path: entry.path, saved: await loadWorktree(root, entry.worktree), current: await readLive(root, entry.path) });
+    }
+    indexInput = await indexReplacement(root, manifest);
+  } catch (error) {
+    throw new Error(`${reason(error)}. Nothing was restored; the backup is kept.`);
+  }
+
+  const started: typeof steps = [];
+  try {
+    for (const step of steps) {
+      started.push(step);
+      await writeLive(root, step.path, step.saved);
+    }
+    // One index write: git applies it through index.lock, so it either fully lands or not at all.
+    await runGitRaw(root, ["update-index", "-z", "--index-info"], { input: indexInput });
+  } catch (error) {
+    const unrestored: string[] = [];
+    for (const step of started.reverse()) await putBack(root, step.path, step.current).catch(() => unrestored.push(step.path));
+    if (unrestored.length > 0) {
+      throw new Error(`${reason(error)}. The restore stopped partway and ${unrestored.join(", ")} could not be put back; the backup is kept in ${backupRef(id)}.`);
+    }
+    throw new Error(`${reason(error)}. Nothing was restored; the backup is kept.`);
+  }
   await runGit(root, ["update-ref", "-d", backupRef(id)]);
   return paths;
 }

@@ -53,6 +53,6 @@ To show history and changes it runs read-only git commands such as `git status`,
 - My Changes lists up to 50 commits in each direction (to push, to pull). Line counts for uncommitted files refresh when git status changes, so a second edit to an already changed file updates its count a little later than its diff. New untracked files show no line counts.
 - A folder group lists up to 300 repositories. A repository tracked on its own and also inside a tracked folder appears in both places.
 - Discard actions work on files, not folders; a new folder full of untracked files is deleted file by file with Discard all, and its empty folders stay. Submodules cannot be discarded.
-- Backups hold the full contents of the affected files in the repository's object store until they are restored or pruned. Very large files are read into memory while a backup is made.
+- Backups hold the full contents of the affected files in the repository's object store until they are restored or pruned, and files are read into memory while a backup is made. A file larger than 32 MB cannot be backed up, so actions on it are refused and nothing changes.
 - If another program edits one of the files during the fraction of a second the action itself takes, that edit can be lost; the backup holds each file as it was just before the action.
 - Very wide histories show up to 10 branch lanes side by side, or 4 in narrow views such as the Explorer; when the window is too narrow for every column, the author and date columns are hidden.

@@ -13,6 +13,7 @@ import {
   repoFilePath,
   restoreBackup,
 } from "../server/backup";
+import { GIT_MAX_BUFFER_BYTES } from "../shared/constants";
 
 const GIT_ENV = {
   ...process.env,
@@ -104,6 +105,50 @@ describe("backups", () => {
     await expect(restoreBackup(repo, backup)).rejects.toThrow("a.txt changed after the change was made");
     await expect(lstat(join(repo, "bin.dat"))).rejects.toThrow();
     expect((await listBackups(repo)).some((summary) => summary.id === backup)).toBe(true);
+  });
+
+  it("changes nothing when the backup cannot be read", async () => {
+    await writeFile(join(repo, "a.txt"), "only in the backup\n");
+    const backup = await createBackup(repo, { kind: "discard", path: "a.txt", area: "unstaged" }, ["a.txt"]);
+    const blob = git("hash-object", "--no-filters", "a.txt");
+    await writeFile(join(repo, "a.txt"), "after the action\n");
+    await recordAfterState(repo, backup);
+    await rm(join(repo, ".git", "objects", blob.slice(0, 2), blob.slice(2)));
+    await expect(restoreBackup(repo, backup)).rejects.toThrow("Nothing was restored");
+    expect(await readFile(join(repo, "a.txt"), "utf8")).toBe("after the action\n");
+    expect((await listBackups(repo)).some((summary) => summary.id === backup)).toBe(true);
+  });
+
+  it("rolls back a restore that fails partway, so it can be retried", async () => {
+    await mkdir(join(repo, "locked"));
+    await writeFile(join(repo, "a.txt"), "first before\n");
+    await writeFile(join(repo, "locked", "b.txt"), "second before\n");
+    const backup = await createBackup(repo, { kind: "discard-all" }, ["a.txt", "locked/b.txt"]);
+    await writeFile(join(repo, "a.txt"), "first after\n");
+    await writeFile(join(repo, "locked", "b.txt"), "second after\n");
+    await recordAfterState(repo, backup);
+    await chmod(join(repo, "locked"), 0o555);
+    try {
+      await expect(restoreBackup(repo, backup)).rejects.toThrow("Nothing was restored");
+      expect(await readFile(join(repo, "a.txt"), "utf8")).toBe("first after\n");
+      expect(await readFile(join(repo, "locked", "b.txt"), "utf8")).toBe("second after\n");
+    } finally {
+      await chmod(join(repo, "locked"), 0o755);
+    }
+    expect(await restoreBackup(repo, backup)).toEqual(["a.txt", "locked/b.txt"]);
+    expect(await readFile(join(repo, "a.txt"), "utf8")).toBe("first before\n");
+    expect(await readFile(join(repo, "locked", "b.txt"), "utf8")).toBe("second before\n");
+  });
+
+  it("refuses to back up a file it could not read back, creating no backup", async () => {
+    const before = (await listBackups(repo)).length;
+    await writeFile(join(repo, "huge.bin"), Buffer.alloc(GIT_MAX_BUFFER_BYTES + 1));
+    try {
+      await expect(createBackup(repo, { kind: "delete", path: "huge.bin" }, ["huge.bin"])).rejects.toThrow("too large to back up");
+      expect(await listBackups(repo)).toHaveLength(before);
+    } finally {
+      await rm(join(repo, "huge.bin"));
+    }
   });
 
   it("refuses to restore a backup without an after-state record", async () => {
